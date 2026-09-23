@@ -1,0 +1,27 @@
+class DiscoverProfile {
+  final String id;
+  final String name;
+  final int age;
+  final String location;
+  final String distance;
+  final String imageUrl;
+  final String bio;
+  final String prompt;
+  final List<String> interests;
+  final bool verified;
+  final bool premium;
+
+  const DiscoverProfile({
+    required this.id,
+    required this.name,
+    required this.age,
+    required this.location,
+    required this.distance,
+    required this.imageUrl,
+    required this.bio,
+    required this.prompt,
+    required this.interests,
+    this.verified = false,
+    this.premium = false,
+  });
+}
