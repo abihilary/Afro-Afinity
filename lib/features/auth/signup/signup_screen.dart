@@ -110,12 +110,12 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                       google: true,
                       onPressed: () async {
                         setState(() => _loading = true);
-                        final authService = ref.read(authServiceProvider);
+                        final authService = ref.read(authServiceProvider.notifier);
                         final success = await authService.signInWithGoogle();
                         if (!mounted) return;
                         setState(() => _loading = false);
                         if (success) {
-                          Navigator.pushReplacementNamed(context, '/home');
+                          context.go('/home');
                         } else {
                           _showError('Google sign up failed.');
                         }

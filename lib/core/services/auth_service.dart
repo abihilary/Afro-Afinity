@@ -15,12 +15,13 @@ class AuthService extends _$AuthService {
   }
 
   Future<bool> signInWithEmail(String email, String password) async {
+    debugPrint('Attempting email sign in for: $email');
     try {
       final response = await _supabase.auth.signInWithPassword(
         email: email,
         password: password,
       );
-
+      debugPrint('Email sign in response: ${response.user != null}');
       return response.user != null;
     } catch (e) {
       debugPrint('Email sign in error: $e');
@@ -29,13 +30,14 @@ class AuthService extends _$AuthService {
   }
 
   Future<bool> signUpWithEmail(String email, String password, String fullName) async {
+    debugPrint('Attempting email sign up for: $email');
     try {
       final response = await _supabase.auth.signUp(
         email: email,
         password: password,
         data: {'full_name': fullName},
       );
-
+      debugPrint('Email sign up response: ${response.user != null}');
       return response.user != null;
     } catch (e) {
       debugPrint('Email sign up error: $e');
@@ -44,24 +46,34 @@ class AuthService extends _$AuthService {
   }
 
   Future<bool> signInWithGoogle() async {
+    debugPrint('Attempting native Google sign in...');
     try {
       // 1. Trigger Native Google Sign-In
       final GoogleSignIn googleSignIn = GoogleSignIn();
 
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-      if (googleUser == null) return false;
+      if (googleUser == null) {
+        debugPrint('Google sign in cancelled by user');
+        return false;
+      }
 
+      debugPrint('Google user signed in: ${googleUser.email}');
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       final String? idToken = googleAuth.idToken;
 
-      if (idToken == null) return false;
+      if (idToken == null) {
+        debugPrint('Google sign in failed: idToken is null');
+        return false;
+      }
 
+      debugPrint('Google idToken obtained, signing in to Supabase...');
       // 2. Use the ID Token to sign in to Supabase
       final response = await _supabase.auth.signInWithIdToken(
         provider: OAuthProvider.google,
         idToken: idToken,
       );
 
+      debugPrint('Supabase Google sign in response: ${response.user != null}');
       return response.user != null;
     } catch (e) {
       debugPrint('Google sign in error: $e');

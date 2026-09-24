@@ -48,8 +48,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _loading = false);
 
     if (success) {
-      // Navigate to home or verification screen
-      Navigator.pushReplacementNamed(context, '/home');
+      context.go('/home');
     } else {
       _showError('Invalid email or password. Please try again.');
     }
@@ -119,7 +118,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         if (!mounted) return;
                         setState(() => _loading = false);
                         if (success) {
-                          Navigator.pushReplacementNamed(context, '/home');
+                          context.go('/home');
                         } else {
                           _showError('Google sign in failed.');
                         }
