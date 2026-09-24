@@ -1,1 +1,99 @@
+import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+part 'auth_service.g.dart';
+
+@riverpod
+class AuthService extends _$AuthService {
+  final _supabase = Supabase.instance.client;
+
+  @override
+  FutureOr<void> build() async {
+    // Initialization logic if needed
+  }
+
+  Future<bool> signInWithEmail(String email, String password) async {
+    try {
+      final response = await _supabase.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+
+      return response.user != null;
+    } catch (e) {
+      debugPrint('Email sign in error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> signUpWithEmail(String email, String password, String fullName) async {
+    try {
+      final response = await _supabase.auth.signUp(
+        email: email,
+        password: password,
+        data: {'full_name': fullName},
+      );
+
+      return response.user != null;
+    } catch (e) {
+      debugPrint('Email sign up error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> signInWithGoogle() async {
+    try {
+      // 1. Trigger Native Google Sign-In
+      final GoogleSignIn googleSignIn = GoogleSignIn();
+
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+      if (googleUser == null) return false;
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final String? idToken = googleAuth.idToken;
+
+      if (idToken == null) return false;
+
+      // 2. Use the ID Token to sign in to Supabase
+      final response = await _supabase.auth.signInWithIdToken(
+        provider: OAuthProvider.google,
+        idToken: idToken,
+      );
+
+      return response.user != null;
+    } catch (e) {
+      debugPrint('Google sign in error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> verifyOTP(String code) async {
+    try {
+      final response = await _supabase.auth.verifyOTP(
+        email: '', // In a real flow, you'd pass the email here
+        token: code,
+        type: OtpType.signup,
+      );
+
+      return response.session != null;
+    } catch (e) {
+      debugPrint('OTP verification error: $e');
+      return false;
+    }
+  }
+
+  Future<void> logout() async {
+    await _supabase.auth.signOut();
+  }
+
+  Future<String?> getCurrentToken() async {
+    final session = _supabase.auth.currentSession;
+    return session?.accessToken;
+  }
+
+  bool isTokenExpired(String token) {
+    return false;
+  }
+}

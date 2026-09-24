@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/gradients.dart';
+import '../../../core/services/auth_service.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
@@ -33,15 +37,22 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _loading = true);
 
-    await Future<void>.delayed(const Duration(milliseconds: 900));
+    final authService = ref.read(authServiceProvider.notifier);
+    final success = await authService.signInWithEmail(
+      _emailController.text.trim(),
+      _passwordController.text,
+    );
 
     if (!mounted) return;
 
     setState(() => _loading = false);
 
-    _showError(
-      'Authentication service will be connected in the backend phase.',
-    );
+    if (success) {
+      // Navigate to home or verification screen
+      Navigator.pushReplacementNamed(context, '/home');
+    } else {
+      _showError('Invalid email or password. Please try again.');
+    }
   }
 
   void _showError(String message) {
@@ -91,7 +102,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       icon: Icons.apple,
                       label: 'Continue with Apple',
                       dark: true,
-                      onPressed: () {},
+                      onPressed: () {
+                        // Apple Sign In implementation
+                      },
                     ),
 
                     const SizedBox(height: 10),
@@ -99,7 +112,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     _SocialButton(
                       label: 'Continue with Google',
                       google: true,
-                      onPressed: () {},
+                      onPressed: () async {
+                        setState(() => _loading = true);
+                        final authService = ref.read(authServiceProvider.notifier);
+                        final success = await authService.signInWithGoogle();
+                        if (!mounted) return;
+                        setState(() => _loading = false);
+                        if (success) {
+                          Navigator.pushReplacementNamed(context, '/home');
+                        } else {
+                          _showError('Google sign in failed.');
+                        }
+                      },
                     ),
 
                     const SizedBox(height: 24),
@@ -225,7 +249,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     Center(
                       child: TextButton(
                         onPressed: () {},
-                        child: const Text.rich(
+                        child: Text.rich(
                           TextSpan(
                             children: [
                               TextSpan(
@@ -238,6 +262,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                   color: AppColors.gold,
                                   fontWeight: FontWeight.w700,
                                 ),
+                                recognizer: TapGestureRecognizer()
+                                  ..onTap = () {
+                                    context.push('/signup');
+                                  },
                               ),
                             ],
                           ),

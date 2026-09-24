@@ -1,14 +1,17 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class VerificationScreen extends StatefulWidget {
+import '../../../core/services/auth_service.dart';
+
+class VerificationScreen extends ConsumerStatefulWidget {
   const VerificationScreen({super.key});
 
   @override
-  State<VerificationScreen> createState() => _VerificationScreenState();
+  ConsumerState<VerificationScreen> createState() => _VerificationScreenState();
 }
 
-class _VerificationScreenState extends State<VerificationScreen>
+class _VerificationScreenState extends ConsumerState<VerificationScreen>
     with SingleTickerProviderStateMixin {
   final List<TextEditingController> _controllers =
       List.generate(6, (_) => TextEditingController());
@@ -85,15 +88,21 @@ class _VerificationScreenState extends State<VerificationScreen>
 
     setState(() => _loading = true);
 
-    await Future<void>.delayed(
-      const Duration(milliseconds: 900),
-    );
+    final code = _controllers.map((c) => c.text).join();
+    final authService = ref.read(authServiceProvider);
+    final success = await authService.verifyOTP(code);
 
     if (!mounted) return;
 
     setState(() => _loading = false);
 
-    context.go('/onboarding');
+    if (success) {
+      context.go('/onboarding');
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid verification code.')),
+      );
+    }
   }
 
   Future<void> _resendCode() async {
