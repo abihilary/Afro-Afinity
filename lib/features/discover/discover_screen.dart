@@ -1,0 +1,782 @@
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../app/theme/colors.dart';
+import '../../app/theme/theme_colors.dart';
+import '../../core/widgets/pressable.dart';
+import '../../features/chat/chat_screen.dart';
+import '../../features/gifts/gift_picker.dart';
+import '../../features/wallet/wallet_screen.dart';
+import '../../models/likes_store.dart';
+import 'filters_sheet.dart';
+import '../matches/match_overlay.dart';
+import '../../models/profile.dart';
+import 'discover_profiles.dart';
+import 'profile_detail_sheet.dart';
+import 'swipe_card.dart';
+import 'swipe_controller.dart';
+
+class DiscoverScreen extends StatefulWidget {
+  const DiscoverScreen({super.key});
+
+  @override
+  State<DiscoverScreen> createState() => _DiscoverScreenState();
+}
+
+class _DiscoverScreenState extends State<DiscoverScreen> {
+  final SwipeController controller = SwipeController();
+  int currentIndex = 0;
+  bool showGiftTip = true;
+  DiscoverProfile? matchProfile;
+  DiscoveryFilters _filters = DiscoveryFilters.defaultFilters;
+
+  @override
+  void initState() {
+    super.initState();
+    controller.addListener(_refresh);
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    controller
+      ..removeListener(_refresh)
+      ..dispose();
+    super.dispose();
+  }
+
+  List<DiscoverProfile> get _filteredProfiles => discoverProfiles.where((profile) {
+    final matchesAge = profile.age >= _filters.ageRange.start &&
+        profile.age <= _filters.ageRange.end;
+    final loc = _filters.location.trim().toLowerCase();
+    final matchesLocation = loc.isEmpty || profile.location.toLowerCase().contains(loc);
+    final matchesSmoking = _filters.smoking == 'All' || profile.smoking == _filters.smoking;
+    final matchesDrinking = _filters.drinking == 'All' || profile.drinking == _filters.drinking;
+    final matchesGoal = _filters.relationshipGoal == 'All' || profile.relationshipGoal == _filters.relationshipGoal;
+
+    return matchesAge && matchesLocation && matchesSmoking && matchesDrinking && matchesGoal;
+  }).toList();
+
+  DiscoverProfile? get currentProfile => currentIndex < _filteredProfiles.length
+      ? _filteredProfiles[currentIndex]
+      : null;
+
+  void _completeSwipe() => setState(() => currentIndex++);
+
+  Future<void> _swipe(SwipeDirection direction) async {
+    if (currentProfile == null || controller.isAnimatingOut) return;
+    final swipedProfile = currentProfile!;
+    await controller.swipe(
+      direction,
+      onComplete: () {
+        _completeSwipe();
+        if (direction == SwipeDirection.right) {
+          setState(() => matchProfile = swipedProfile);
+        }
+      },
+    );
+  }
+
+  Future<void> _superLike() async {
+    if (currentProfile == null || controller.isAnimatingOut) return;
+    await controller.superLike(onComplete: _completeSwipe);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = currentProfile;
+    final dark = ThemeColors.isDark(context);
+    return Scaffold(
+      backgroundColor: ThemeColors.background(context),
+      body: Stack(
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(-.8, -.9),
+            radius: 1.25,
+            colors: dark
+                ? const [Color(0xFF282115), AppColors.black]
+                : const [Color(0xFFFFF7CC), AppColors.lightBackground],
+          ),
+        ),
+            child: SafeArea(
+              child: Column(
+            children: [
+              _Header(
+                onFilter: _showFilters,
+                activeFilterCount: _filters.activeFilterCount,
+              ),
+              Expanded(
+                child: profile == null ? _emptyState() : _discoverContent(profile),
+              ),
+              _BottomNav(
+                activeTab: 'discover',
+                onDiscover: () {},
+                onLikes: () => context.push('/likes'),
+                onFeed: () => context.push('/feed'),
+                onChat: () => context.push('/chat'),
+                onProfile: () => context.push('/profile'),
+              ),
+            ],
+              ),
+            ),
+          ),
+          if (matchProfile != null)
+            MatchOverlay(
+              profile: matchProfile!,
+              onMessage: _openChat,
+              onMessageLater: _saveForLater,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _discoverContent(DiscoverProfile profile) {
+    return LayoutBuilder(
+      builder: (context, box) {
+        const controlsHeight = 112.0;
+        final maxCardWidth = math.min(box.maxWidth - 36, 370.0);
+        final maxCardHeight = math.max(260.0, box.maxHeight - controlsHeight);
+        final height = math.min(maxCardHeight, maxCardWidth / .75);
+        final width = height * .75;
+        return Center(
+          child: SizedBox(
+            width: width,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _cardDeck(profile, width, height),
+                const SizedBox(height: 5),
+                _GiftTip(visible: showGiftTip),
+                const SizedBox(height: 4),
+                _ActionBar(
+                  onUndo: _undo,
+                  onNope: () => _swipe(SwipeDirection.left),
+                  onSuperLike: _superLike,
+                  onGift: _gift,
+                  onLike: () => _swipe(SwipeDirection.right),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _cardDeck(DiscoverProfile profile, double width, double height) {
+    return SizedBox(
+      width: width,
+      height: height + 34,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onPanUpdate: (details) => controller.update(details.delta),
+        onPanEnd: (_) async {
+          final result = await controller.endDrag();
+          if (result != null) _completeSwipe();
+        },
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            if (currentIndex + 1 < _filteredProfiles.length)
+              Positioned(
+                top: 25,
+                left: 12,
+                child: SizedBox(
+                  width: width - 24,
+                  height: height,
+                  child: Opacity(
+                    opacity: .82,
+                    child: SwipeCard(
+                      profile: _filteredProfiles[currentIndex + 1],
+                      rotation: 0,
+                      position: Offset.zero,
+                      likeProgress: 0,
+                      nopeProgress: 0,
+                      compact: true,
+                      onOpenProfile: () => ProfileDetailSheet.show(
+                        context,
+                        _filteredProfiles[currentIndex + 1],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            SizedBox(
+              width: width,
+              height: height,
+              child: SwipeCard(
+                profile: profile,
+                rotation: controller.rotation,
+                position: controller.position,
+                likeProgress: controller.showingLike ? controller.progress : 0,
+                nopeProgress: controller.showingNope ? controller.progress : 0,
+                onOpenProfile: () => ProfileDetailSheet.show(context, profile),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyState() => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.auto_awesome_rounded,
+            color: AppColors.gold,
+            size: 64,
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'You’re all caught up',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'More people will arrive soon.',
+            style: TextStyle(color: Colors.white60),
+          ),
+          const SizedBox(height: 20),
+          OutlinedButton(
+            onPressed: () => setState(() => currentIndex = 0),
+            child: const Text('Start again'),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  void _undo() {
+    if (currentIndex == 0 || controller.isAnimatingOut) return;
+    HapticFeedback.lightImpact();
+    setState(() => currentIndex--);
+  }
+
+  void _gift() {
+    HapticFeedback.selectionClick();
+    if (currentProfile != null) {
+      GiftPickerSheet.show(
+        context,
+        recipientName: currentProfile!.name,
+        recipientImageUrl: currentProfile!.imageUrl,
+      );
+    }
+  }
+
+  void _openChat() {
+    final profile = matchProfile;
+    if (profile == null) return;
+    setState(() => matchProfile = null);
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ConversationScreen(
+          name: profile.name,
+          imageUrl: profile.imageUrl,
+        ),
+      ),
+    );
+  }
+
+  void _saveForLater() {
+    final profile = matchProfile;
+    if (profile == null) return;
+    LikesStore.instance.add(profile);
+    setState(() => matchProfile = null);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${profile.name} was added to your Likes.'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showFilters() {
+    HapticFeedback.selectionClick();
+    FiltersSheet.show(
+      context,
+      initialFilters: _filters,
+      onApply: (newFilters) {
+        setState(() {
+          _filters = newFilters;
+          currentIndex = 0;
+        });
+      },
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({
+    required this.onFilter,
+    required this.activeFilterCount,
+  });
+  final VoidCallback onFilter;
+  final int activeFilterCount;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(18, 11, 18, 8),
+    child: Row(
+      children: [
+        CircleAvatar(
+          radius: 19,
+          backgroundColor: ThemeColors.surfaceAlt(context),
+          child: Text(
+            'AA',
+            style: TextStyle(
+              color: ThemeColors.text(context),
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+        const SizedBox(width: 9),
+        Text(
+          'Affinity',
+          style: TextStyle(
+            color: ThemeColors.text(context),
+            fontSize: 19,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const Spacer(),
+        const _CoinPill(),
+        const SizedBox(width: 7),
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            _HeaderIcon(icon: Icons.search_rounded, onTap: onFilter),
+            if (activeFilterCount > 0)
+              Positioned(
+                top: -2,
+                right: -2,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: AppColors.pink,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    '$activeFilterCount',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(width: 7),
+        const _BadgeIcon(icon: Icons.notifications_none_rounded),
+      ],
+    ),
+  );
+}
+
+class _CoinPill extends StatelessWidget {
+  const _CoinPill();
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: () => WalletScreen.show(context),
+    child: Container(
+      height: 38,
+      padding: const EdgeInsets.symmetric(horizontal: 11),
+      decoration: BoxDecoration(
+        color: const Color(0xFF3A321C),
+        borderRadius: BorderRadius.circular(99),
+        border: Border.all(color: AppColors.gold.withValues(alpha: .35)),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.monetization_on_rounded, color: AppColors.gold, size: 16),
+          SizedBox(width: 5),
+          Text(
+            '1,250',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _HeaderIcon extends StatelessWidget {
+  const _HeaderIcon({required this.icon, required this.onTap});
+  final IconData icon;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => InkResponse(
+    onTap: onTap,
+    radius: 22,
+    child: Container(
+      width: 38,
+      height: 38,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: ThemeColors.surfaceAlt(context),
+    ),
+      child: Icon(icon, color: ThemeColors.text(context), size: 19),
+    ),
+  );
+}
+
+class _BadgeIcon extends StatelessWidget {
+  const _BadgeIcon({required this.icon});
+  final IconData icon;
+  @override
+  Widget build(BuildContext context) => Stack(
+    clipBehavior: Clip.none,
+    children: [
+      const _HeaderIcon(icon: Icons.notifications_none_rounded, onTap: _noop),
+      Positioned(
+        top: 2,
+        right: 3,
+        child: Container(
+          width: 8,
+          height: 8,
+          decoration: const BoxDecoration(
+            color: Color(0xFFFFA84C),
+            shape: BoxShape.circle,
+          ),
+        ),
+      ),
+    ],
+  );
+  static void _noop() {}
+}
+
+class _GiftTip extends StatelessWidget {
+  const _GiftTip({required this.visible});
+  final bool visible;
+  @override
+  Widget build(BuildContext context) => AnimatedOpacity(
+    opacity: visible ? 1 : 0,
+    duration: const Duration(milliseconds: 180),
+    child: IgnorePointer(
+      ignoring: !visible,
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Gift 50 ',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Icon(
+                  Icons.monetization_on_outlined,
+                  color: AppColors.gold,
+                  size: 13,
+                ),
+                Text(
+                  ' to stand out • 3x matches',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _ActionBar extends StatelessWidget {
+  const _ActionBar({
+    required this.onUndo,
+    required this.onNope,
+    required this.onSuperLike,
+    required this.onGift,
+    required this.onLike,
+  });
+  final VoidCallback onUndo, onNope, onSuperLike, onGift, onLike;
+  @override
+  Widget build(BuildContext context) => Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        _ActionButton(
+          icon: Icons.replay_rounded,
+          size: 38,
+          color: const Color(0xFF8B8E98),
+          onTap: onUndo,
+        ),
+        _ActionButton(
+          icon: Icons.close_rounded,
+          size: 44,
+          color: const Color(0xFFFF6A78),
+          onTap: onNope,
+        ),
+        _ActionButton(
+          icon: Icons.star_rounded,
+          size: 50,
+          color: const Color(0xFF5AD9FF),
+          onTap: onSuperLike,
+        ),
+        _ActionButton(
+          icon: Icons.card_giftcard_rounded,
+          size: 44,
+          color: AppColors.gold,
+          onTap: onGift,
+        ),
+        _ActionButton(
+          icon: Icons.favorite_rounded,
+          size: 50,
+          color: const Color(0xFFFFA21E),
+          onTap: onLike,
+        ),
+      ],
+    );
+}
+
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({
+    required this.icon,
+    required this.size,
+    required this.color,
+    required this.onTap,
+  });
+  final IconData icon;
+  final double size;
+  final Color color;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => PressableScale(
+    onTap: onTap,
+    child: Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color.withValues(alpha: .18),
+        border: Border.all(color: color.withValues(alpha: .82)),
+        boxShadow: [
+          BoxShadow(color: color.withValues(alpha: .18), blurRadius: 17),
+        ],
+      ),
+      child: Icon(icon, color: color, size: size * .44),
+    ),
+  );
+}
+
+class _BottomNav extends StatelessWidget {
+  const _BottomNav({
+    required this.onDiscover,
+    required this.onLikes,
+    required this.onFeed,
+    required this.onChat,
+    required this.onProfile,
+    this.activeTab = 'discover',
+  });
+
+  final VoidCallback onDiscover;
+  final VoidCallback onLikes;
+  final VoidCallback onFeed;
+  final VoidCallback onChat;
+  final VoidCallback onProfile;
+  final String activeTab;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 70,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: ThemeColors.surface(context),
+        border: Border(
+          top: BorderSide(
+            color: ThemeColors.border(context),
+          ),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _NavItem(
+            icon: Icons.explore_rounded,
+            label: 'Discover',
+            active: activeTab == 'discover',
+            onTap: onDiscover,
+          ),
+          _NavItem(
+            icon: Icons.favorite_border_rounded,
+            label: 'Likes',
+            badge: '12',
+            active: activeTab == 'likes',
+            onTap: onLikes,
+          ),
+          _NavItem(
+            icon: Icons.dynamic_feed_rounded,
+            label: 'Feeds',
+            active: activeTab == 'feed',
+            onTap: onFeed,
+          ),
+          _NavItem(
+            icon: Icons.chat_bubble_outline_rounded,
+            label: 'Chat',
+            dot: true,
+            active: activeTab == 'chat',
+            onTap: onChat,
+          ),
+          _NavItem(
+            icon: Icons.person_outline_rounded,
+            label: 'Profile',
+            active: activeTab == 'profile',
+            onTap: onProfile,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.active = false,
+    this.badge,
+    this.dot = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool active;
+  final String? badge;
+  final bool dot;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = active
+        ? AppColors.gold
+        : Colors.white54;
+
+    return SizedBox(
+      width: 62,
+      child: PressableScale(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            vertical: 7,
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(
+                    icon,
+                    color: color,
+                    size: 22,
+                  ),
+                  if (badge != null)
+                    Positioned(
+                      right: -12,
+                      top: -8,
+                      child: _NavBadge(
+                        text: badge!,
+                      ),
+                    ),
+                  if (dot)
+                    Positioned(
+                      right: -4,
+                      top: -3,
+                      child: Container(
+                        width: 7,
+                        height: 7,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFF5578),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 10,
+                  fontWeight: active
+                      ? FontWeight.w800
+                      : FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavBadge extends StatelessWidget {
+  const _NavBadge({
+    required this.text,
+  });
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 5,
+        vertical: 1,
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFF4771),
+        borderRadius: BorderRadius.circular(99),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 8,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
