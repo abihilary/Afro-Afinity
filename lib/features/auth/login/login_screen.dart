@@ -118,7 +118,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         if (!mounted) return;
                         setState(() => _loading = false);
                         if (success) {
-                          context.go('/home');
+                          final completed = await authService.hasCompletedOnboarding();
+                          if (completed) {
+                            context.go('/home');
+                          } else {
+                            context.go('/onboarding');
+                          }
                         } else {
                           _showError('Google sign in failed.');
                         }

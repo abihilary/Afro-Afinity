@@ -1,14 +1,18 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class OnboardingScreen extends StatefulWidget {
+import '../../core/services/auth_service.dart';
+import '../../models/user_profile.dart';
+
+class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
   @override
-  State<OnboardingScreen> createState() => _OnboardingScreenState();
+  ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen>
+class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
     with SingleTickerProviderStateMixin {
   int _step = 0;
 
@@ -61,7 +65,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     super.dispose();
   }
 
-  void _next() {
+  bool _isLoading = false;
+
+  void _next() async {
     if (!_validateStep()) return;
 
     if (_step < 3) {
@@ -73,7 +79,32 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         ..reset()
         ..forward();
     } else {
-      context.go('/discover');
+      setState(() => _isLoading = true);
+      try {
+        final profile = UserProfile(
+          displayName: _nameController.text.trim(),
+          pronouns: _pronouns ?? '',
+          lookingFor: _lookingFor ?? '',
+          interests: _interests.toList(),
+          bio: _bioController.text.trim(),
+        );
+
+        final success = await ref
+            .read(authServiceProvider.notifier)
+            .updateUserProfile(profile);
+
+        if (!mounted) return;
+
+        if (success) {
+          context.go('/home');
+        } else {
+          _showMessage('Failed to save profile. Please try again.');
+        }
+      } catch (e) {
+        _showMessage('An error occurred: $e');
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -140,32 +171,43 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     return Scaffold(
       backgroundColor: background,
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            _buildHeader(gold),
-            Expanded(
-              child: FadeTransition(
-                opacity: CurvedAnimation(
-                  parent: _animationController,
-                  curve: Curves.easeOut,
-                ),
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0.04, 0),
-                    end: Offset.zero,
-                  ).animate(
-                    CurvedAnimation(
+            Column(
+              children: [
+                _buildHeader(gold),
+                Expanded(
+                  child: FadeTransition(
+                    opacity: CurvedAnimation(
                       parent: _animationController,
-                      curve: Curves.easeOutCubic,
+                      curve: Curves.easeOut,
+                    ),
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0.04, 0),
+                        end: Offset.zero,
+                      ).animate(
+                        CurvedAnimation(
+                          parent: _animationController,
+                          curve: Curves.easeOutCubic,
+                        ),
+                      ),
+                      child: _buildStep(
+                        gold: gold,
+                        terracotta: terracotta,
+                      ),
                     ),
                   ),
-                  child: _buildStep(
-                    gold: gold,
-                    terracotta: terracotta,
-                  ),
+                ),
+              ],
+            ),
+            if (_isLoading)
+              Container(
+                color: Colors.black.withValues(alpha: 0.5),
+                child: const Center(
+                  child: CircularProgressIndicator(color: Color(0xFFDAA520)),
                 ),
               ),
-            ),
           ],
         ),
       ),

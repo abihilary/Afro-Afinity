@@ -1,19 +1,21 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../app/theme/colors.dart';
 import '../../app/theme/gradients.dart';
-import '../auth/login/login_screen.dart';
+import '../../core/services/auth_service.dart';
 
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
+class _SplashScreenState extends ConsumerState<SplashScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _scale;
@@ -37,18 +39,22 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    Timer(const Duration(milliseconds: 2200), () {
+    Timer(const Duration(milliseconds: 2200), () async {
       if (!mounted) return;
 
-      Navigator.of(context).pushReplacement(
-        PageRouteBuilder(
-          pageBuilder: (_, animation, __) => const LoginScreen(),
-          transitionDuration: const Duration(milliseconds: 450),
-          transitionsBuilder: (_, animation, __, child) {
-            return FadeTransition(opacity: animation, child: child);
-          },
-        ),
-      );
+      final authService = ref.read(authServiceProvider.notifier);
+      final session = Supabase.instance.client.auth.currentSession;
+
+      if (session != null) {
+        final completed = await authService.hasCompletedOnboarding();
+        if (completed) {
+          context.go('/home');
+        } else {
+          context.go('/onboarding');
+        }
+      } else {
+        context.go('/login');
+      }
     });
   }
 

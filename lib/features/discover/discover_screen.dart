@@ -481,21 +481,32 @@ class _BottomNav extends StatelessWidget {
     decoration: const BoxDecoration(
       border: Border(top: BorderSide(color: Color(0xFF292A31))),
     ),
-    child: const Row(
+    child: Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
-        _NavItem(icon: Icons.explore_rounded, label: 'Discover', active: true),
+        _NavItem(
+          icon: Icons.explore_rounded,
+          label: 'Discover',
+          active: true,
+          onTap: () => context.go('/home'),
+        ),
         _NavItem(
           icon: Icons.favorite_border_rounded,
           label: 'Likes',
           badge: '12',
+          onTap: () => context.go('/likes'),
         ),
         _NavItem(
           icon: Icons.chat_bubble_outline_rounded,
           label: 'Chat',
           dot: true,
+          onTap: () => context.go('/chat'),
         ),
-        _NavItem(icon: Icons.person_outline_rounded, label: 'Profile'),
+        _NavItem(
+          icon: Icons.person_outline_rounded,
+          label: 'Profile',
+          onTap: () => context.go('/profile'),
+        ),
       ],
     ),
   );
@@ -505,53 +516,59 @@ class _NavItem extends StatelessWidget {
   const _NavItem({
     required this.icon,
     required this.label,
+    required this.onTap,
     this.active = false,
     this.badge,
     this.dot = false,
   });
   final IconData icon;
   final String label;
+  final VoidCallback onTap;
   final bool active, dot;
   final String? badge;
   @override
   Widget build(BuildContext context) {
     final color = active ? AppColors.gold : Colors.white54;
-    return SizedBox(
-      width: 58,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Icon(icon, color: color, size: 22),
-              if (badge != null)
-                Positioned(right: -12, top: -8, child: _NavBadge(text: badge!)),
-              if (dot)
-                Positioned(
-                  right: -4,
-                  top: -3,
-                  child: Container(
-                    width: 7,
-                    height: 7,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFFF5578),
-                      shape: BoxShape.circle,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        width: 58,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(icon, color: color, size: 22),
+                if (badge != null)
+                  Positioned(right: -12, top: -8, child: _NavBadge(text: badge!)),
+                if (dot)
+                  Positioned(
+                    right: -4,
+                    top: -3,
+                    child: Container(
+                      width: 7,
+                      height: 7,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFF5578),
+                        shape: BoxShape.circle,
+                      ),
                     ),
                   ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 10,
-              fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+              ],
             ),
-          ),
-        ],
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 10,
+                fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

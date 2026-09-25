@@ -3,6 +3,8 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../models/user_profile.dart';
+
 part 'auth_service.g.dart';
 
 @riverpod
@@ -108,4 +110,46 @@ class AuthService extends _$AuthService {
   bool isTokenExpired(String token) {
     return false;
   }
+
+  Future<bool> updateUserProfile(UserProfile profile) async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return false;
+
+      await _supabase
+          .from('profiles')
+          .upsert({
+            'id': user.id,
+            ...profile.toMap(),
+          });
+
+      return true;
+    } catch (e) {
+      debugPrint('Update user profile error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> hasCompletedOnboarding() async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return false;
+
+      final data = await _supabase
+          .from('profiles')
+          .select()
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (data == null) return false;
+
+      // Consider onboarding complete if they have a display name and interests
+      return (data['display_name'] != null &&
+              (data['interests'] as List?)?.isNotEmpty == true);
+    } catch (e) {
+      debugPrint('Check onboarding status error: $e');
+      return false;
+    }
+  }
 }
+
