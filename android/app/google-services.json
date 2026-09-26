@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "663237549190",
+    "project_id": "afroaffinity",
+    "storage_bucket": "afroaffinity.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:663237549190:android:7e9c59d6c72d280fb10507",
+        "android_client_info": {
+          "package_name": "com.example.african_affinity"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "663237549190-9e2dvcjfh5p3chv1gv7ge5vhtin6djil.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBurtd_exUMTHgDVEsgbNfi8LvdCu1OfMs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "663237549190-9e2dvcjfh5p3chv1gv7ge5vhtin6djil.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
