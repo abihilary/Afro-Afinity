@@ -1162,7 +1162,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                                 SizedBox(width: 6),
                                 Text(
-                                  'Change banner',
+                                  'switch banner',
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: 12,
