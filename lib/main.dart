@@ -13,6 +13,12 @@ void main() async {
     anonKey: AuthConfig.supabaseAnonKey,
   );
 
+  final session = Supabase.instance.client.auth.currentSession;
+  debugPrint('Main: Initial session found: ${session != null}');
+  if (session != null) {
+    debugPrint('Main: Session user: ${session.user?.email}');
+  }
+
   runApp(
     const ProviderScope(
       child: AfricanAffinityApp(),

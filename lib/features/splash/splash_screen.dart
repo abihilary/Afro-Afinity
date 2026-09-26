@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/theme/colors.dart';
 import '../../app/theme/gradients.dart';
@@ -43,9 +44,23 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       if (!mounted) return;
 
       final authService = ref.read(authServiceProvider.notifier);
-      final session = Supabase.instance.client.auth.currentSession;
+
+      // Try to get current session
+      var session = Supabase.instance.client.auth.currentSession;
+
+      // If session is null, try to recover it from local storage explicitly
+      // although supabase_flutter should do this, sometimes a small delay or
+      // explicit check helps on some platforms.
+      if (session == null) {
+        debugPrint('No current session found, checking for recoverable session...');
+        // In some versions of supabase_flutter, we might need to wait for
+        // the auth state to be initialized.
+        await Future.delayed(const Duration(milliseconds: 500));
+        session = Supabase.instance.client.auth.currentSession;
+      }
 
       if (session != null) {
+        debugPrint('Session recovered: ${session.user?.email}');
         final completed = await authService.hasCompletedOnboarding();
         if (completed) {
           context.go('/home');
@@ -53,6 +68,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           context.go('/onboarding');
         }
       } else {
+        debugPrint('No session available, redirecting to login');
         context.go('/login');
       }
     });
