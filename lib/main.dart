@@ -10,13 +10,13 @@ void main() async {
 
   await Supabase.initialize(
     url: AuthConfig.supabaseUrl,
-    anonKey: AuthConfig.supabaseAnonKey,
+    publishableKey: AuthConfig.supabaseAnonKey,
   );
 
   final session = Supabase.instance.client.auth.currentSession;
   debugPrint('Main: Initial session found: ${session != null}');
   if (session != null) {
-    debugPrint('Main: Session user: ${session.user?.email}');
+    debugPrint('Main: Session user: ${session.user.email}');
   }
 
   runApp(

@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/theme/colors.dart';
-import '../../app/theme/gradients.dart';
 import '../../core/services/auth_service.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -210,10 +209,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Widget _buildInterestsTile(dynamic interests) {
-    if (interests == null || (interests as List).isEmpty) {
+    if (interests == null || interests is! List || interests.isEmpty) {
       return const Text('No interests listed.', style: TextStyle(color: Colors.white70, fontSize: 14));
     }
-    final list = interests as List;
+    final list = interests;
     return Wrap(
       spacing: 8,
       runSpacing: 8,

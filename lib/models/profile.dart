@@ -10,6 +10,10 @@ class DiscoverProfile {
   final List<String> interests;
   final bool verified;
   final bool premium;
+  final String smoking;
+  final String drinking;
+  final String relationshipGoal;
+  final String educationLevel;
 
   const DiscoverProfile({
     required this.id,
@@ -23,5 +27,9 @@ class DiscoverProfile {
     required this.interests,
     this.verified = false,
     this.premium = false,
+    this.smoking = 'Non-smoker',
+    this.drinking = 'Social drinker',
+    this.relationshipGoal = 'Long-term',
+    this.educationLevel = 'Bachelor\'s',
   });
 }

@@ -293,7 +293,7 @@ class _GiftPickerSheetState extends State<GiftPickerSheet> {
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       itemCount: GiftItem.all.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 12),
+                      separatorBuilder: (_, _) => const SizedBox(width: 12),
                       itemBuilder: (context, index) {
                         final gift = GiftItem.all[index];
                         final isSelected = _selectedGiftIndex == index;
@@ -408,7 +408,7 @@ class _GiftPickerSheetState extends State<GiftPickerSheet> {
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       itemCount: _suggestions.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      separatorBuilder: (_, _) => const SizedBox(width: 8),
                       itemBuilder: (context, index) {
                         final suggestion = _suggestions[index];
                         final isSelected =
