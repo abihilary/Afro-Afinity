@@ -46,3 +46,7 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Local build-time secrets for --dart-define-from-file (never commit)
+/config/*.json
+!/config/*.example.json
