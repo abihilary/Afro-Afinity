@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/theme/colors.dart';
 import '../../app/theme/theme_colors.dart';
+import '../../core/api/api_client.dart';
 import '../../core/widgets/pressable.dart';
 import '../../features/chat/chat_screen.dart';
 import '../../features/gifts/gift_picker.dart';
@@ -33,10 +34,14 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   DiscoverProfile? matchProfile;
   DiscoveryFilters _filters = DiscoveryFilters.defaultFilters;
 
+  List<DiscoverProfile> _profiles = discoverProfiles;
+  bool _isLoading = true;
+
   @override
   void initState() {
     super.initState();
     controller.addListener(_refresh);
+    _loadDiscoverProfiles();
   }
 
   void _refresh() {
@@ -51,7 +56,65 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     super.dispose();
   }
 
-  List<DiscoverProfile> get _filteredProfiles => discoverProfiles.where((profile) {
+  Future<void> _loadDiscoverProfiles() async {
+    try {
+      final apiClient = ApiClient();
+      final res = await apiClient.get('/discover', queryParameters: {
+        'deck': 'true',
+        'limit': 30,
+      });
+
+      List<dynamic> items = [];
+      if (res is List) {
+        items = res;
+      } else if (res is Map) {
+        if (res['items'] is List) {
+          items = res['items'];
+        } else if (res['profiles'] is List) {
+          items = res['profiles'];
+        } else if (res['data'] is List) {
+          items = res['data'];
+        }
+      }
+
+      final mapped = items.map((json) {
+        final other = json['other'] ?? json;
+        return DiscoverProfile(
+          id: other['user_id']?.toString() ?? other['id']?.toString() ?? '1',
+          name: other['display_name'] ?? other['username'] ?? 'User',
+          age: other['age'] ?? 25,
+          location: other['city'] ?? other['country_code'] ?? 'Cameroon',
+          distance: '${other['distance_km'] ?? 5} km away',
+          imageUrl: other['avatar_url'] ?? 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&w=900&q=90',
+          bio: other['bio'] ?? 'Rooted in culture, connected by heart.',
+          prompt: other['prompt'] ?? 'Jollof or waakye? Defend your choice.',
+          interests: other['interests'] is List ? List<String>.from(other['interests']) : ['Afrobeats', 'Culture'],
+          verified: other['verified'] == true,
+          smoking: other['smoking'] ?? 'Non-smoker',
+          drinking: other['drinking'] ?? 'Social drinker',
+          relationshipGoal: other['relationship_goal'] ?? 'Dating',
+          educationLevel: other['education_level'] ?? 'Bachelor\'s',
+        );
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _profiles = mapped.isNotEmpty ? mapped : discoverProfiles;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Discover load error: $e');
+      if (mounted) {
+        setState(() {
+          _profiles = discoverProfiles;
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  List<DiscoverProfile> get _filteredProfiles => _profiles.where((profile) {
     final matchesAge = profile.age >= _filters.ageRange.start &&
         profile.age <= _filters.ageRange.end;
     final loc = _filters.location.trim().toLowerCase();
@@ -72,6 +135,18 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   Future<void> _swipe(SwipeDirection direction) async {
     if (currentProfile == null || controller.isAnimatingOut) return;
     final swipedProfile = currentProfile!;
+
+    final kind = direction == SwipeDirection.right ? 'like' : 'pass';
+    try {
+      final apiClient = ApiClient();
+      await apiClient.post('/likes', data: {
+        'to': swipedProfile.id,
+        'kind': kind,
+      });
+    } catch (e) {
+      debugPrint('Like error: $e');
+    }
+
     await controller.swipe(
       direction,
       onComplete: () {
@@ -85,6 +160,24 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
   Future<void> _superLike() async {
     if (currentProfile == null || controller.isAnimatingOut) return;
+    final swipedProfile = currentProfile!;
+
+    try {
+      final apiClient = ApiClient();
+      await apiClient.post('/likes', data: {
+        'to': swipedProfile.id,
+        'kind': 'superlike',
+      });
+    } catch (e) {
+      debugPrint('Superlike error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Superlike failed: Not enough coins or limit reached')),
+        );
+      }
+      return;
+    }
+
     await controller.superLike(onComplete: _completeSwipe);
   }
 
@@ -114,7 +207,9 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                 activeFilterCount: _filters.activeFilterCount,
               ),
               Expanded(
-                child: profile == null ? _emptyState() : _discoverContent(profile),
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator(color: AppColors.gold))
+                    : profile == null ? _emptyState() : _discoverContent(profile),
               ),
               _BottomNav(
                 activeTab: 'discover',
