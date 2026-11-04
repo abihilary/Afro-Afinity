@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/gradients.dart';
-import 'package:go_router/go_router.dart';
+import '../../../core/api/api_client.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -33,15 +37,61 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _loading = true);
 
-    await Future<void>.delayed(
-      const Duration(milliseconds: 900),
-    );
+    try {
+      await Supabase.instance.client.auth.signInWithPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() => _loading = false);
+      final apiClient = ApiClient();
+      final meData = await apiClient.get('/me');
+      final status = meData is Map ? (meData['status'] ?? (meData['profile'] is Map ? meData['profile']['status'] : null) ?? 'active') : 'active';
 
-    context.go('/discover');
+      if (!mounted) return;
+      switch (status) {
+        case 'onboarding':
+          context.go('/onboarding');
+          break;
+        case 'pending':
+        case 'active':
+          context.go('/discover');
+          break;
+        default:
+          context.go('/discover');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showError('Login failed: ${e.toString()}');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    try {
+      final googleSignIn = GoogleSignIn();
+      final googleUser = await googleSignIn.signIn();
+      final googleAuth = await googleUser?.authentication;
+      final accessToken = googleAuth?.accessToken;
+      final idToken = googleAuth?.idToken;
+
+      if (accessToken == null) {
+        throw 'No Google Access Token found.';
+      }
+
+      await Supabase.instance.client.auth.signInWithIdToken(
+        provider: OAuthProvider.google,
+        idToken: idToken ?? '',
+        accessToken: accessToken,
+      );
+
+      if (!mounted) return;
+      context.go('/discover');
+    } catch (e) {
+      if (mounted) _showError('Google Sign-In failed: $e');
+    }
   }
 
   void _showError(String message) {
@@ -100,7 +150,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     _SocialButton(
                       label: 'Continue with Google',
                       google: true,
-                      onPressed: () {},
+                      onPressed: _signInWithGoogle,
                     ),
 
                     const SizedBox(height: 24),

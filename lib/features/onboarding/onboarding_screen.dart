@@ -3,6 +3,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:dio/dio.dart';
+
+import '../../core/api/api_client.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -108,15 +111,46 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       ..forward();
   }
 
-  void _finishOnboarding() {
-    // At this stage the profile information is ready.
-    //
-    // Later this is where we can save the completed profile
-    // to Riverpod/backend/storage.
-    //
-    // For now we proceed directly to Discover.
+  Future<void> _finishOnboarding() async {
+    try {
+      final apiClient = ApiClient();
+      
+      await apiClient.patch('/me', data: {
+        'first_name': _nameController.text.trim(),
+        'bio': _bioController.text.trim(),
+        'birth_date': _birthday?.toIso8601String().split('T').first ?? '2000-01-01',
+        'gender': _pronouns?.toLowerCase() ?? 'other',
+        'looking_for': _lookingFor?.toLowerCase() ?? 'everyone',
+        'interests': _interests.toList(),
+      });
 
-    context.go('/discover');
+      for (final photo in _photos) {
+        final ext = photo.path.split('.').last;
+        final signRes = await apiClient.post('/uploads/sign', data: {
+          'bucket': 'photos',
+          'ext': ext.isEmpty ? 'jpg' : ext,
+        });
+        
+        final path = signRes is Map ? signRes['path'] : null;
+        final uploadUrl = signRes is Map ? (signRes['signedUrl'] ?? signRes['token']) : null;
+        
+        if (uploadUrl != null && path != null) {
+          final bytes = await photo.readAsBytes();
+          await Dio().put(uploadUrl, data: bytes);
+
+          await apiClient.put('/me/photos', data: {
+            'paths': [path],
+          });
+        }
+      }
+
+      await apiClient.post('/me/complete-onboarding');
+
+      if (!mounted) return;
+      context.go('/discover');
+    } catch (e) {
+      _showMessage('Failed to complete onboarding: $e');
+    }
   }
 
   // ------------------------------------------------------------

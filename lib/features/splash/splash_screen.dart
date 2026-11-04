@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/theme/colors.dart';
 import '../../app/theme/gradients.dart';
+import '../../core/api/api_client.dart';
 import '../../core/widgets/safe_image.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -48,9 +50,39 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    Future.delayed(const Duration(milliseconds: 1600), () {
-      if (mounted) {
-        context.go('/login');
+    Future.delayed(const Duration(milliseconds: 1000), () async {
+      if (!mounted) return;
+      try {
+        final session = Supabase.instance.client.auth.currentSession;
+        if (session == null) {
+          if (mounted) context.go('/login');
+          return;
+        }
+
+        final apiClient = ApiClient();
+        final meData = await apiClient.get('/me');
+        final status = meData is Map ? (meData['status'] ?? (meData['profile'] is Map ? meData['profile']['status'] : null) ?? 'active') : 'active';
+
+        if (!mounted) return;
+        switch (status) {
+          case 'onboarding':
+            context.go('/onboarding');
+            break;
+          case 'pending':
+          case 'active':
+            context.go('/discover');
+            break;
+          case 'suspended':
+          case 'deleted':
+            await Supabase.instance.client.auth.signOut();
+            if (mounted) context.go('/login');
+            break;
+          default:
+            context.go('/discover');
+        }
+      } catch (e) {
+        debugPrint('Splash session restore error: $e');
+        if (mounted) context.go('/login');
       }
     });
   }

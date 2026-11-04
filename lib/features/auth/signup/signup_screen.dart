@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -82,17 +84,30 @@ class _SignupScreenState extends State<SignupScreen>
       _loading = true;
     });
 
-    await Future<void>.delayed(
-      const Duration(milliseconds: 900),
-    );
+    try {
+      await Supabase.instance.client.auth.signUp(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+        data: {
+          'first_name': 'Member',
+          'username': 'user_${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}',
+          'gender': 'other',
+          'birth_date': '2000-01-01',
+          'locale': 'en',
+        },
+      );
 
-    if (!mounted) return;
-
-    setState(() {
-      _loading = false;
-    });
-
-    context.go('/verification');
+      if (!mounted) return;
+      context.go('/onboarding');
+    } catch (e) {
+      if (mounted) _showError('Sign up failed: ${e.toString()}');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
   }
 
   // ===========================================================================
@@ -113,17 +128,34 @@ class _SignupScreenState extends State<SignupScreen>
       _socialLoading = true;
     });
 
-    await Future<void>.delayed(
-      const Duration(milliseconds: 900),
-    );
+    try {
+      final googleSignIn = GoogleSignIn();
+      final googleUser = await googleSignIn.signIn();
+      final googleAuth = await googleUser?.authentication;
+      final accessToken = googleAuth?.accessToken;
+      final idToken = googleAuth?.idToken;
 
-    if (!mounted) return;
+      if (accessToken == null) {
+        throw 'No Google Access Token found.';
+      }
 
-    setState(() {
-      _socialLoading = false;
-    });
+      await Supabase.instance.client.auth.signInWithIdToken(
+        provider: OAuthProvider.google,
+        idToken: idToken ?? '',
+        accessToken: accessToken,
+      );
 
-    context.go('/verification');
+      if (!mounted) return;
+      context.go('/discover');
+    } catch (e) {
+      if (mounted) _showError('Google Sign-In failed: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _socialLoading = false;
+        });
+      }
+    }
   }
 
   // ===========================================================================
