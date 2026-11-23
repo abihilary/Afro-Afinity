@@ -6,6 +6,7 @@ import '../../app/theme/colors.dart';
 import '../../core/state/providers.dart';
 import '../../core/state/session.dart';
 import '../../core/ui/api_errors.dart';
+import '../../core/widgets/brand_header.dart';
 
 /// Shown while the session restores and `/me` loads. The router's redirect
 /// moves on as soon as `/me` answers; this screen only has to handle the
@@ -29,11 +30,9 @@ class SplashScreen extends ConsumerWidget {
         child: SafeArea(
           child: Center(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Image.asset('assets/images/mark.png', width: 104, height: 104)
+              const BrandHeader(markSize: 104, showTagline: false)
                   .animate(onPlay: (c) => c.repeat(reverse: true))
-                  .scaleXY(begin: .96, end: 1.04, duration: 1400.ms, curve: Curves.easeInOut),
-              const SizedBox(height: 22),
-              Image.asset('assets/images/wordmark.png', width: 190).animate().fadeIn(duration: 500.ms),
+                  .scaleXY(begin: .985, end: 1.015, duration: 1400.ms, curve: Curves.easeInOut),
               const SizedBox(height: 10),
               const Text('Love, rooted in culture',
                   style: TextStyle(color: Colors.white54, fontSize: 13, letterSpacing: .4)),
