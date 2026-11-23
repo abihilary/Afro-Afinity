@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 
 import '../../../app/config/auth_config.dart';
 import '../../../core/services/google_auth.dart';
+import '../../../core/widgets/brand_header.dart';
 import '../../../core/ui/api_errors.dart';
 import '../../../core/util/links.dart';
 
@@ -332,66 +333,7 @@ class _SignupScreenState extends State<SignupScreen>
                       // BRAND
                       // =======================================================
 
-                      Center(
-                        child: Column(
-                          children: [
-                            Container(
-                              width: 62,
-                              height: 62,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: const LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    Color(0xFFE1B65A),
-                                    Color(0xFFB87532),
-                                  ],
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: gold.withValues(alpha: 0.20),
-                                    blurRadius: 28,
-                                    spreadRadius: 2,
-                                  ),
-                                ],
-                              ),
-                              child: const Center(
-                                child: Text(
-                                  'AA',
-                                  style: TextStyle(
-                                    color: Color(0xFF171519),
-                                    fontSize: 21,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: -1,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            const Text(
-                              'Affinity',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 27,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: -0.5,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              'Rooted in Culture, Connected by Heart',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Color(0xFFD0A956),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                                letterSpacing: 0.3,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      const BrandHeader(markSize: 80),
 
                       const SizedBox(height: 42),
 
@@ -413,7 +355,7 @@ class _SignupScreenState extends State<SignupScreen>
                       const SizedBox(height: 9),
 
                       const Text(
-                        'Start your journey with Affinity',
+                        'Start your journey with Afro Affinity',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: mutedText,

@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../app/config/auth_config.dart';
 import '../../../app/theme/colors.dart';
+import '../../../core/widgets/brand_header.dart';
 import '../../../app/theme/gradients.dart';
 import '../../../core/services/google_auth.dart';
 import '../../../core/ui/api_errors.dart';
@@ -280,114 +281,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildBrandHeader() {
-    return Container(
-      height: 172,
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppColors.terracotta,
-            AppColors.terracottaDark,
-            AppColors.gold,
-          ],
-        ),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            top: 22,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Container(
-                width: 92,
-                height: 26,
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-            ),
-          ),
-
-          Positioned(
-            left: 20,
-            right: 20,
-            bottom: 16,
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: .9),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  alignment: Alignment.center,
-                  child: ShaderMask(
-                    shaderCallback: (bounds) =>
-                        AppGradients.gold.createShader(bounds),
-                    child: const Text(
-                      'AA',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(width: 12),
-
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Affinity',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      SizedBox(height: 3),
-                      Text(
-                        'Rooted in Culture, Connected by Heart',
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                Container(
-                  width: 88,
-                  height: 88,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: .9),
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(
-                      color: Colors.white54,
-                    ),
-                  ),
-                  alignment: Alignment.center,
-                  child: const Icon(
-                    Icons.person_rounded,
-                    size: 42,
-                    color: AppColors.terracottaDark,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(20, 30, 20, 6),
+      child: BrandHeader(),
     );
   }
 }
