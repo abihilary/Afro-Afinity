@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../app/config/auth_config.dart';
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/gradients.dart';
 import '../../../core/services/google_auth.dart';
@@ -114,6 +115,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     const SizedBox(height: 24),
 
+                    if (AuthConfig.googleEnabled) ...[
                     _SocialButton(
                       label: 'Continue with Google',
                       google: true,
@@ -142,6 +144,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
 
                     const SizedBox(height: 24),
+                    ],
 
                     _Field(
                       controller: _emailController,

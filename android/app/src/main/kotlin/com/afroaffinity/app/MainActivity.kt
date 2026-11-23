@@ -1,4 +1,4 @@
-package com.example.african_affinity
+package com.afroaffinity.app
 
 import io.flutter.embedding.android.FlutterActivity
 

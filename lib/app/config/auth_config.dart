@@ -15,5 +15,8 @@ class AuthConfig {
   /// Google sign-in: the *web* client ID is the server client ID that
   /// Supabase verifies the ID token against.
   static const String googleWebClientId = String.fromEnvironment('GOOGLE_WEB_CLIENT_ID');
+  /// False until a Google web client ID is built in: the buttons hide rather
+  /// than offer a sign-in that cannot work.
+  static bool get googleEnabled => googleWebClientId.isNotEmpty;
   static const String googleIosClientId = String.fromEnvironment('GOOGLE_IOS_CLIENT_ID');
 }

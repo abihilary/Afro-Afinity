@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/gestures.dart';
 
+import '../../../app/config/auth_config.dart';
 import '../../../core/services/google_auth.dart';
 import '../../../core/ui/api_errors.dart';
 import '../../../core/util/links.dart';
@@ -423,6 +424,7 @@ class _SignupScreenState extends State<SignupScreen>
 
                       const SizedBox(height: 30),
 
+                      if (AuthConfig.googleEnabled) ...[
                       // =======================================================
                       // GOOGLE
                       // =======================================================
@@ -473,6 +475,7 @@ class _SignupScreenState extends State<SignupScreen>
                       ),
 
                       const SizedBox(height: 27),
+                      ],
 
                       // =======================================================
                       // FORM
