@@ -200,7 +200,7 @@ class _MatchesTab extends StatelessWidget {
               subtitle: 'Matched ${shortAgo(r.at)}',
               trailing: IconButton(
                 icon: const Icon(Icons.chat_bubble_outline_rounded, color: AppColors.gold),
-                onPressed: () => MemberActions(context, ref).openChat(r.member.userId, conversationId: r.conversationId),
+                onPressed: () => MemberActions(context, ref).openChat(r.member.userId, conversationId: r.conversationId, name: r.member.name),
               ),
             );
           },
@@ -278,7 +278,7 @@ class _FriendsTabState extends ConsumerState<_FriendsTab> {
                   _ => PopupMenuButton<String>(
                       iconColor: Colors.white54,
                       color: AppColors.darkSurface2,
-                      onSelected: (v) => v == 'message' ? MemberActions(context, ref).openChat(r.member.userId) : _remove(r),
+                      onSelected: (v) => v == 'message' ? MemberActions(context, ref).openChat(r.member.userId, name: r.member.name) : _remove(r),
                       itemBuilder: (_) => const [
                         PopupMenuItem(value: 'message', child: Text('Message', style: TextStyle(color: Colors.white))),
                         PopupMenuItem(value: 'remove', child: Text('Unfriend', style: TextStyle(color: AppColors.error))),

@@ -18,6 +18,7 @@ import 'package:flutter_test/flutter_test.dart';
 Json fx(String name) => jsonDecode(File('test/fixtures/$name.json').readAsStringSync()) as Json;
 
 void main() {
+  gateModeTests();
   group('models parse real API payloads', () {
     test('/me', () {
       final me = Me(fx('me'));
@@ -132,5 +133,28 @@ void main() {
     test('offline is not "something went wrong"', () => expect(errorText(NetworkException('x')), contains('offline')));
     test('incomplete lists what is missing', () => expect(errorText(e('incomplete', {'missing': ['city', 'photos']})), contains('city, photos')));
     test('unknown codes fall back to the server message', () => expect(errorText(e('weird_code')), 'raw'));
+  });
+}
+
+void gateModeTests() {
+  group('chat gate mode', () {
+    Store withMode(String? mode) => Store({
+          ...fx('store'),
+          'pricing': {'unlock_coins': 30, 'chat_gate_mode': ?mode, 'chat_free_messages': 5},
+        });
+
+    test('soft means the door is free and the allowance is read from settings', () {
+      final s = withMode('soft');
+      expect(s.softGate, isTrue);
+      expect(s.chatFreeMessages, 5);
+      expect(s.unlockCoins, 30);
+    });
+
+    test('hard charges up front', () => expect(withMode('hard').softGate, isFalse));
+
+    test('an unknown or missing mode is treated as hard, the schema default', () {
+      expect(withMode(null).softGate, isFalse);
+      expect(withMode('weird').softGate, isFalse);
+    });
   });
 }

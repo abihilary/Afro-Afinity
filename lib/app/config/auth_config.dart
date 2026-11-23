@@ -14,9 +14,18 @@ class AuthConfig {
 
   /// Google sign-in: the *web* client ID is the server client ID that
   /// Supabase verifies the ID token against.
-  static const String googleWebClientId = String.fromEnvironment('GOOGLE_WEB_CLIENT_ID');
-  /// False until a Google web client ID is built in: the buttons hide rather
-  /// than offer a sign-in that cannot work.
+  ///
+  /// This is the same web client the website's Google button uses (Supabase
+  /// reads it from its Google provider), so tokens minted for it are accepted.
+  /// It is a public identifier, not a secret. Android additionally needs an
+  /// *Android* OAuth client in the same Google Cloud project for this package
+  /// and signing key; see README.
+  static const String googleWebClientId = String.fromEnvironment(
+    'GOOGLE_WEB_CLIENT_ID',
+    defaultValue: '663237549190-9e2dvcjfh5p3chv1gv7ge5vhtin6djil.apps.googleusercontent.com',
+  );
+  /// False only if a build blanks the client ID out (`--dart-define=GOOGLE_WEB_CLIENT_ID=`):
+  /// the buttons then hide rather than offer a sign-in that cannot work.
   static bool get googleEnabled => googleWebClientId.isNotEmpty;
   static const String googleIosClientId = String.fromEnvironment('GOOGLE_IOS_CLIENT_ID');
 }

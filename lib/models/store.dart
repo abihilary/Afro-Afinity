@@ -110,6 +110,13 @@ class Store {
   final bool sandbox;
 
   int get unlockCoins => asInt(pricing['unlock_coins']) ?? 30;
+
+  /// `chat.gate_mode`: 'hard' charges [unlockCoins] to open a chat with
+  /// someone you have not matched; 'soft' opens it free and allows
+  /// [chatFreeMessages] before asking for the same price to continue. Never
+  /// guess it: the two modes say opposite things to the member.
+  bool get softGate => asString(pricing['chat_gate_mode']) == 'soft';
+  int get chatFreeMessages => asInt(pricing['chat_free_messages']) ?? 5;
   int get superlikeCoins => asInt(pricing['superlike_coins']) ?? 5;
   int get boostCoins => asInt(pricing['boost_coins']) ?? 50;
   int get boostHours => asInt(pricing['boost_hours']) ?? 1;

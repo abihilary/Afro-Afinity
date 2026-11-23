@@ -93,12 +93,12 @@ class MemberActions {
 
   /// Opens the conversation with this member, unlocking it first if needed
   /// (free on a match, otherwise it costs coins — the screen says how many).
-  void openChat(String userId, {String? conversationId}) {
+  void openChat(String userId, {String? conversationId, String? name}) {
     if (!ensureVerified(context, ref)) return;
     if (conversationId != null) {
       context.push('/messages/$conversationId');
     } else {
-      context.push('/messages/new/$userId');
+      context.push(Uri(path: '/messages/new/$userId', queryParameters: {'name': ?name}).toString());
     }
   }
 

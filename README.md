@@ -27,6 +27,9 @@ flutter build apk --release        # no --dart-define: defaults point at product
   nobody can update the app in place; the app id is `com.afroaffinity.app`.
 - Release signing SHA-1: `16:F9:5C:03:9B:2A:E1:24:DA:2C:E6:30:3B:3B:78:96:96:FB:AC:92`
   (register it for any Android OAuth client / Play).
-- Google sign-in is hidden unless the build gets `--dart-define=GOOGLE_WEB_CLIENT_ID=...`.
+- Google sign-in uses the web client `663237549190-9e2dvcjfh5p3chv1gv7ge5vhtin6djil` (the one Supabase
+  uses). It only works on Android once an **Android OAuth client** exists in the same Google Cloud
+  project (`afroaffinity`) for package `com.afroaffinity.app` and the signing SHA-1 above (add the
+  debug SHA-1 too for `flutter run`). No rebuild is needed after registering it.
 - Local stack: `flutter run --dart-define-from-file=config/local.json`
   (copy `config/local.example.json`).

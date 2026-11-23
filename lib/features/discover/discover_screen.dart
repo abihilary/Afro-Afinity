@@ -177,7 +177,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
         myImageUrl: myAvatar,
         onMessage: () {
           Navigator.pop(ctx);
-          MemberActions(context, ref).openChat(m.userId, conversationId: r.conversationId);
+          MemberActions(context, ref).openChat(m.userId, conversationId: r.conversationId, name: m.name);
         },
         onMessageLater: () => Navigator.pop(ctx),
       ),

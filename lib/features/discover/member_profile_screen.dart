@@ -82,7 +82,7 @@ class _MemberProfileScreenState extends ConsumerState<MemberProfileScreen> {
               myImageUrl: myAvatar,
               onMessage: () {
                 Navigator.pop(ctx);
-                _actions.openChat(p.card.userId, conversationId: r.conversationId);
+                _actions.openChat(p.card.userId, conversationId: r.conversationId, name: p.card.name);
               },
               onMessageLater: () => Navigator.pop(ctx),
             ),
@@ -366,7 +366,7 @@ class _MemberProfileScreenState extends ConsumerState<MemberProfileScreen> {
                     label: 'Message',
                     icon: Icons.chat_bubble_rounded,
                     onPressed: () => canAct(ref)
-                        ? _actions.openChat(m.userId, conversationId: rel.conversationId)
+                        ? _actions.openChat(m.userId, conversationId: rel.conversationId, name: m.name)
                         : ensureVerified(context, ref),
                   ),
                 ),

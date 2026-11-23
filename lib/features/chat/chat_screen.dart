@@ -14,6 +14,7 @@ import '../../core/state/session.dart';
 import '../../core/ui/api_errors.dart';
 import '../../core/util/json.dart';
 import '../../core/util/time.dart';
+import '../../core/widgets/app_toast.dart';
 import '../../core/widgets/common.dart';
 import '../../core/widgets/safe_image.dart';
 import '../../models/conversation.dart';
@@ -58,6 +59,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       // The list is reversed: older history is at the max extent.
       if (_scroll.position.pixels > _scroll.position.maxScrollExtent - 300) _loadOlder();
     });
+    // The paywall quotes pricing.unlock_coins: make sure it is today's price.
+    Future.microtask(() => ref.invalidate(storeProvider));
     _load();
     _subscribe();
   }
@@ -220,6 +223,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       });
       if (!mounted) return;
       if (e is ApiException && e.code == 'message_quota_reached') {
+        // Not a failure to retry: the allowance is used up. Put the text back
+        // in the box and let the paywall take over.
+        setState(() {
+          _msgs.removeWhere((m) => m.id == tempId);
+          if (attachmentPath == null) _input.text = temp.body ?? '';
+        });
         _reloadHeader();
       } else {
         handleApiError(context, e);
@@ -259,6 +268,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       final balance = asInt(r['balance']);
       if (balance != null) ref.read(meProvider.notifier).setBalance(balance);
       _reloadHeader();
+      if (mounted) showToast(context, 'Chat unlocked. Say what you were going to say.');
     } catch (e) {
       if (mounted) handleApiError(context, e);
     }
@@ -394,16 +404,33 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
     if (h.messagesLeft == 0) {
       final store = ref.watch(storeProvider).valueOrNull;
+      final cost = store?.unlockCoins ?? 30;
+      final balance = ref.watch(meProvider).valueOrNull?.balance ?? 0;
+      final short = balance < cost;
       return SafeArea(
         top: false,
         child: Container(
           padding: const EdgeInsets.all(16),
           color: AppColors.darkSurface,
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Text('You have used your free messages here. Keep the conversation going, or wait for a reply.',
-                textAlign: TextAlign.center, style: TextStyle(color: Colors.white70, height: 1.4)),
+            const Text("You've used your free messages",
+                textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            Text('Unlock this chat to keep talking to ${h.other.name} — no limit after that.',
+                textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70, height: 1.4)),
             const SizedBox(height: 12),
-            PrimaryButton(label: 'Keep chatting${store == null ? '' : ' · ${store.unlockCoins} coins'}', onPressed: _continue, height: 48),
+            PrimaryButton(
+              label: short ? 'Get more coins' : 'Keep chatting · $cost coins',
+              icon: short ? Icons.toll_rounded : null,
+              onPressed: short ? () => context.push('/wallet') : _continue,
+              height: 48,
+            ),
+            if (short)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text('This costs $cost coins and you have $balance.',
+                    style: const TextStyle(color: Colors.white38, fontSize: 11.5)),
+              ),
           ]),
         ),
       );
@@ -417,7 +444,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           if (h.messagesLeft != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
-              child: Text('${h.messagesLeft} free message${h.messagesLeft == 1 ? '' : 's'} left until they reply',
+              child: Text('${h.messagesLeft} free message${h.messagesLeft == 1 ? '' : 's'} left',
                   style: const TextStyle(color: AppColors.gold, fontSize: 12)),
             ),
           Row(children: [

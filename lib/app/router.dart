@@ -98,7 +98,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       // Opening a chat with someone: unlocks (free on a match) then replaces
       // itself with the thread.
-      GoRoute(path: '/messages/new/:userId', builder: (_, s) => NewChatScreen(userId: s.pathParameters['userId']!)),
+      GoRoute(path: '/messages/new/:userId', builder: (_, s) => NewChatScreen(userId: s.pathParameters['userId']!, name: s.uri.queryParameters['name'])),
       GoRoute(path: '/messages/:id', builder: (_, s) => ChatScreen(conversationId: s.pathParameters['id']!)),
       GoRoute(path: '/u/:username', builder: (_, s) => MemberProfileScreen(username: s.pathParameters['username']!)),
       GoRoute(path: '/search', builder: (_, s) => SearchScreen(directory: s.uri.queryParameters['mode'] == 'directory')),
