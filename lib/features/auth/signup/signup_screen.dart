@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter/gestures.dart';
+
+import '../../../core/services/google_auth.dart';
+import '../../../core/ui/api_errors.dart';
+import '../../../core/util/links.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -68,125 +72,64 @@ class _SignupScreenState extends State<SignupScreen>
 
   Future<void> _createAccount() async {
     FocusScope.of(context).unfocus();
-
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
+    if (!_formKey.currentState!.validate()) return;
     if (!_acceptedTerms) {
-      _showError(
-        'Please confirm that you are 18+ and accept the Terms & Privacy Policy.',
-      );
+      _showError('Please confirm that you are 18+ and accept the Terms & Privacy Policy.');
       return;
     }
-
-    setState(() {
-      _loading = true;
-    });
-
+    setState(() => _loading = true);
     try {
-      await Supabase.instance.client.auth.signUp(
+      // Only the locale travels in the metadata, as on the web: a trigger
+      // creates the profile, and onboarding fills it in through PATCH /me.
+      final res = await Supabase.instance.client.auth.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text,
-        data: {
-          'first_name': 'Member',
-          'username': 'user_${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}',
-          'gender': 'other',
-          'birth_date': '2000-01-01',
-          'locale': 'en',
-        },
+        data: {'locale': 'en'},
       );
-
       if (!mounted) return;
-      context.go('/onboarding');
-    } catch (e) {
-      if (mounted) _showError('Sign up failed: ${e.toString()}');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-        });
+      if (res.session == null) {
+        // Email confirmation is on: there is no session until the link is
+        // clicked, so say so rather than leaving them on a dead screen.
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A20),
+            title: const Text('Check your inbox', style: TextStyle(color: Colors.white)),
+            content: Text(
+              'We sent a confirmation link to ${_emailController.text.trim()}. Open it, then sign in here.',
+              style: const TextStyle(color: Colors.white70),
+            ),
+            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+          ),
+        );
+        if (mounted) context.go('/login');
       }
+      // With a session, the router's redirect goes to onboarding.
+    } on AuthException catch (e) {
+      if (mounted) _showError(e.message.toLowerCase().contains('already registered') ? 'An account with that email already exists. Sign in instead.' : e.message);
+    } catch (e) {
+      if (mounted) _showError(errorText(e));
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
-
-  // ===========================================================================
-  // GOOGLE
-  // ===========================================================================
 
   Future<void> _continueWithGoogle() async {
     FocusScope.of(context).unfocus();
-
     if (!_acceptedTerms) {
-      _showError(
-        'Please confirm that you are 18+ and accept the Terms & Privacy Policy.',
-      );
+      _showError('Please confirm that you are 18+ and accept the Terms & Privacy Policy.');
       return;
     }
-
-    setState(() {
-      _socialLoading = true;
-    });
-
+    setState(() => _socialLoading = true);
     try {
-      final googleSignIn = GoogleSignIn();
-      final googleUser = await googleSignIn.signIn();
-      final googleAuth = await googleUser?.authentication;
-      final accessToken = googleAuth?.accessToken;
-      final idToken = googleAuth?.idToken;
-
-      if (accessToken == null) {
-        throw 'No Google Access Token found.';
-      }
-
-      await Supabase.instance.client.auth.signInWithIdToken(
-        provider: OAuthProvider.google,
-        idToken: idToken ?? '',
-        accessToken: accessToken,
-      );
-
-      if (!mounted) return;
-      context.go('/discover');
+      await signInWithGoogle();
+    } on AuthException catch (e) {
+      if (mounted) _showError(e.message);
     } catch (e) {
-      if (mounted) _showError('Google Sign-In failed: $e');
+      if (mounted) _showError(e is GoogleAuthUnavailable ? e.toString() : 'Google sign-in failed.');
     } finally {
-      if (mounted) {
-        setState(() {
-          _socialLoading = false;
-        });
-      }
+      if (mounted) setState(() => _socialLoading = false);
     }
-  }
-
-  // ===========================================================================
-  // APPLE
-  // ===========================================================================
-
-  Future<void> _continueWithApple() async {
-    FocusScope.of(context).unfocus();
-
-    if (!_acceptedTerms) {
-      _showError(
-        'Please confirm that you are 18+ and accept the Terms & Privacy Policy.',
-      );
-      return;
-    }
-
-    setState(() {
-      _socialLoading = true;
-    });
-
-    await Future<void>.delayed(
-      const Duration(milliseconds: 900),
-    );
-
-    if (!mounted) return;
-
-    setState(() {
-      _socialLoading = false;
-    });
-
-    context.go('/verification');
   }
 
   // ===========================================================================
@@ -494,22 +437,6 @@ class _SignupScreenState extends State<SignupScreen>
 
                       const SizedBox(height: 12),
 
-                      // =======================================================
-                      // APPLE
-                      // =======================================================
-
-                      _SocialButton(
-                        icon: const Icon(
-                          Icons.apple,
-                          color: Colors.white,
-                          size: 23,
-                        ),
-                        label: 'Continue with Apple',
-                        onPressed: _socialLoading
-                            ? null
-                            : _continueWithApple,
-                      ),
-
                       const SizedBox(height: 27),
 
                       // =======================================================
@@ -677,35 +604,37 @@ class _SignupScreenState extends State<SignupScreen>
                                       top: 3,
                                     ),
                                     child: RichText(
-                                      text: const TextSpan(
-                                        style: TextStyle(
+                                      text: TextSpan(
+                                        style: const TextStyle(
                                           color: Color(0xFF999398),
                                           fontSize: 11.5,
                                           height: 1.55,
                                         ),
                                         children: [
-                                          TextSpan(
+                                          const TextSpan(
                                             text:
                                             'I confirm that I am 18 or older and agree to the ',
                                           ),
                                           TextSpan(
                                             text: 'Terms of Service',
-                                            style: TextStyle(
+                                            recognizer: TapGestureRecognizer()..onTap = () => openWeb('/terms'),
+                                            style: const TextStyle(
                                               color: gold,
                                               fontWeight: FontWeight.w600,
                                             ),
                                           ),
-                                          TextSpan(
+                                          const TextSpan(
                                             text: ' and ',
                                           ),
                                           TextSpan(
                                             text: 'Privacy Policy',
-                                            style: TextStyle(
+                                            recognizer: TapGestureRecognizer()..onTap = () => openWeb('/privacy'),
+                                            style: const TextStyle(
                                               color: gold,
                                               fontWeight: FontWeight.w600,
                                             ),
                                           ),
-                                          TextSpan(
+                                          const TextSpan(
                                             text: '.',
                                           ),
                                         ],

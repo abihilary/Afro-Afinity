@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme/colors.dart';
+import '../../core/widgets/safe_image.dart';
 import '../../models/profile.dart';
 
 class MatchOverlay extends StatelessWidget {
@@ -9,9 +10,11 @@ class MatchOverlay extends StatelessWidget {
     required this.profile,
     required this.onMessage,
     required this.onMessageLater,
+    this.myImageUrl,
   });
 
   final DiscoverProfile profile;
+  final String? myImageUrl;
   final VoidCallback onMessage;
   final VoidCallback onMessageLater;
 
@@ -64,7 +67,7 @@ class MatchOverlay extends StatelessWidget {
                     children: [
                       Transform.rotate(
                         angle: -.10,
-                        child: _Avatar(imageUrl: profile.imageUrl),
+                        child: _Avatar(imageUrl: myImageUrl),
                       ),
                       Align(
                         alignment: Alignment.bottomRight,
@@ -111,7 +114,7 @@ class MatchOverlay extends StatelessWidget {
 class _Avatar extends StatelessWidget {
   const _Avatar({required this.imageUrl});
 
-  final String imageUrl;
+  final String? imageUrl;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -124,14 +127,7 @@ class _Avatar extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(21),
-          child: Image.network(
-            imageUrl,
-            fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => const ColoredBox(
-              color: AppColors.darkSurface,
-              child: Icon(Icons.person_rounded, color: Colors.white24),
-            ),
-          ),
+          child: SafeImage(urlOrPath: imageUrl),
         ),
       );
 }

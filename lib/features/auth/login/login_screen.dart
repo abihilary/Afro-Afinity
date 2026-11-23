@@ -1,11 +1,13 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../../app/theme/colors.dart';
 import '../../../app/theme/gradients.dart';
-import '../../../core/api/api_client.dart';
+import '../../../core/services/google_auth.dart';
+import '../../../core/ui/api_errors.dart';
+import '../../../core/widgets/app_toast.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,8 +17,10 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
+  // Debug builds can prefill from --dart-define (config/local.json) so the
+  // simulator can sign in to local test accounts; release builds never do.
+  final _emailController = TextEditingController(text: kDebugMode ? const String.fromEnvironment('DEV_EMAIL') : '');
+  final _passwordController = TextEditingController(text: kDebugMode ? const String.fromEnvironment('DEV_PASSWORD') : '');
 
   bool _obscurePassword = true;
   bool _loading = false;
@@ -29,76 +33,48 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
-    if (_emailController.text.trim().isEmpty ||
-        _passwordController.text.isEmpty) {
+    FocusScope.of(context).unfocus();
+    if (_emailController.text.trim().isEmpty || _passwordController.text.isEmpty) {
       _showError('Please enter your email and password.');
       return;
     }
-
     setState(() => _loading = true);
-
     try {
       await Supabase.instance.client.auth.signInWithPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
-
-      if (!mounted) return;
-
-      final apiClient = ApiClient();
-      final meData = await apiClient.get('/me');
-      final status = meData is Map ? (meData['status'] ?? (meData['profile'] is Map ? meData['profile']['status'] : null) ?? 'active') : 'active';
-
-      if (!mounted) return;
-      switch (status) {
-        case 'onboarding':
-          context.go('/onboarding');
-          break;
-        case 'pending':
-        case 'active':
-          context.go('/discover');
-          break;
-        default:
-          context.go('/discover');
-      }
+      // The router's redirect takes it from here, on /me's status.
+    } on AuthException catch (e) {
+      if (mounted) _showError(_authMessage(e));
     } catch (e) {
-      if (!mounted) return;
-      _showError('Login failed: ${e.toString()}');
+      if (mounted) _showError(errorText(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
   Future<void> _signInWithGoogle() async {
+    setState(() => _loading = true);
     try {
-      final googleSignIn = GoogleSignIn();
-      final googleUser = await googleSignIn.signIn();
-      final googleAuth = await googleUser?.authentication;
-      final accessToken = googleAuth?.accessToken;
-      final idToken = googleAuth?.idToken;
-
-      if (accessToken == null) {
-        throw 'No Google Access Token found.';
-      }
-
-      await Supabase.instance.client.auth.signInWithIdToken(
-        provider: OAuthProvider.google,
-        idToken: idToken ?? '',
-        accessToken: accessToken,
-      );
-
-      if (!mounted) return;
-      context.go('/discover');
+      await signInWithGoogle();
+    } on AuthException catch (e) {
+      if (mounted) _showError(_authMessage(e));
     } catch (e) {
-      if (mounted) _showError('Google Sign-In failed: $e');
+      if (mounted) _showError(e is GoogleAuthUnavailable ? e.toString() : 'Google sign-in failed.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+  String _authMessage(AuthException e) {
+    final m = e.message.toLowerCase();
+    if (m.contains('invalid login')) return 'That email and password do not match.';
+    if (m.contains('not confirmed')) return 'Confirm your email first — check your inbox for the link.';
+    return e.message;
   }
+
+  void _showError(String message) => showToast(context, message, error: true);
 
   @override
   Widget build(BuildContext context) {
@@ -137,15 +113,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
 
                     const SizedBox(height: 24),
-
-                    _SocialButton(
-                      icon: Icons.apple,
-                      label: 'Continue with Apple',
-                      dark: true,
-                      onPressed: () {},
-                    ),
-
-                    const SizedBox(height: 10),
 
                     _SocialButton(
                       label: 'Continue with Google',
@@ -211,7 +178,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton(
-                        onPressed: () {},
+                        onPressed: () => context.push('/forgot'),
                         child: const Text(
                           'Forgot password?',
                           style: TextStyle(
@@ -423,17 +390,13 @@ class _LoginScreenState extends State<LoginScreen> {
 }
 
 class _SocialButton extends StatelessWidget {
-  final IconData? icon;
   final String label;
-  final bool dark;
   final bool google;
   final VoidCallback onPressed;
 
   const _SocialButton({
     required this.label,
     required this.onPressed,
-    this.icon,
-    this.dark = false,
     this.google = false,
   });
 
@@ -445,20 +408,19 @@ class _SocialButton extends StatelessWidget {
       child: ElevatedButton(
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: dark ? Colors.white : Colors.white,
+          backgroundColor: Colors.white,
           foregroundColor: Colors.black87,
-          elevation: dark ? 6 : 1,
+          elevation: 1,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(26),
             side: BorderSide(
-              color: dark ? Colors.transparent : Colors.black12,
+              color: Colors.black12,
             ),
           ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (icon != null) Icon(icon, size: 19),
             if (google)
               Container(
                 width: 20,
@@ -482,7 +444,7 @@ class _SocialButton extends StatelessWidget {
                   ),
                 ),
               ),
-            if (icon != null || google) const SizedBox(width: 10),
+            if (google) const SizedBox(width: 10),
             Text(
               label,
               style: const TextStyle(

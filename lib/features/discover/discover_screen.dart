@@ -1,876 +1,403 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme/colors.dart';
-import '../../app/theme/theme_colors.dart';
 import '../../core/api/api_client.dart';
+import '../../core/state/providers.dart';
+import '../../core/ui/verified_gate.dart';
+import '../../core/util/json.dart';
+import '../../core/widgets/common.dart';
 import '../../core/widgets/pressable.dart';
-import '../../features/chat/chat_screen.dart';
-import '../../features/gifts/gift_picker.dart';
-import '../../features/wallet/wallet_screen.dart';
-import '../../models/likes_store.dart';
-import 'filters_sheet.dart';
-import '../matches/match_overlay.dart';
+import '../../models/member.dart';
 import '../../models/profile.dart';
-import 'discover_profiles.dart';
-import 'profile_detail_sheet.dart';
+import '../gifts/gift_picker.dart';
+import '../matches/match_overlay.dart';
+import 'filters.dart';
+import 'member_actions.dart';
+import 'member_tile.dart';
 import 'swipe_card.dart';
 import 'swipe_controller.dart';
 
-class DiscoverScreen extends StatefulWidget {
+/// The deck (Meet Me) and the grid, both on `GET /discover`. Filters are sent
+/// to the server; nothing is filtered or invented on the device.
+class DiscoverScreen extends ConsumerStatefulWidget {
   const DiscoverScreen({super.key});
-
   @override
-  State<DiscoverScreen> createState() => _DiscoverScreenState();
+  ConsumerState<DiscoverScreen> createState() => _DiscoverScreenState();
 }
 
-class _DiscoverScreenState extends State<DiscoverScreen> {
-  final SwipeController controller = SwipeController();
-  int currentIndex = 0;
-  bool showGiftTip = true;
-  DiscoverProfile? matchProfile;
-  DiscoveryFilters _filters = DiscoveryFilters.defaultFilters;
+class _Swiped {
+  const _Swiped(this.index, this.kind);
+  final int index;
+  final String kind;
+}
 
-  List<DiscoverProfile> _profiles = discoverProfiles;
-  bool _isLoading = true;
+class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
+  final _swipe = SwipeController();
+  final _grid = ScrollController();
+  SearchFilters _filters = const SearchFilters();
+  bool _deck = true;
+  final List<MemberCard> _items = [];
+  int? _nextOffset = 0;
+  bool _loading = false;
+  Object? _error;
+  int _index = 0;
+  _Swiped? _last;
+  bool _busy = false;
 
   @override
   void initState() {
     super.initState();
-    controller.addListener(_refresh);
-    _loadDiscoverProfiles();
-  }
-
-  void _refresh() {
-    if (mounted) setState(() {});
+    _swipe.addListener(() => setState(() {}));
+    _grid.addListener(() {
+      if (_grid.position.pixels > _grid.position.maxScrollExtent - 600) _load();
+    });
+    _reload();
   }
 
   @override
   void dispose() {
-    controller
-      ..removeListener(_refresh)
-      ..dispose();
+    _swipe.dispose();
+    _grid.dispose();
     super.dispose();
   }
 
-  Future<void> _loadDiscoverProfiles() async {
+  Future<void> _reload() async {
+    setState(() {
+      _items.clear();
+      _nextOffset = 0;
+      _index = 0;
+      _last = null;
+      _error = null;
+    });
+    await _load();
+  }
+
+  Future<void> _load() async {
+    if (_loading || _nextOffset == null) return;
+    setState(() => _loading = true);
     try {
-      final apiClient = ApiClient();
-      final res = await apiClient.get('/discover', queryParameters: {
-        'deck': 'true',
-        'limit': 30,
+      final j = await ref.read(apiClientProvider).getJson('/discover', query: {
+        ..._filters.toDiscoverQuery(),
+        'deck': _deck ? 'true' : null,
+        'limit': 24,
+        'offset': _nextOffset,
       });
-
-      List<dynamic> items = [];
-      if (res is List) {
-        items = res;
-      } else if (res is Map) {
-        if (res['items'] is List) {
-          items = res['items'];
-        } else if (res['profiles'] is List) {
-          items = res['profiles'];
-        } else if (res['data'] is List) {
-          items = res['data'];
-        }
-      }
-
-      final mapped = items.map((json) {
-        final other = json['other'] ?? json;
-        return DiscoverProfile(
-          id: other['user_id']?.toString() ?? other['id']?.toString() ?? '1',
-          name: other['display_name'] ?? other['username'] ?? 'User',
-          age: other['age'] ?? 25,
-          location: other['city'] ?? other['country_code'] ?? 'Cameroon',
-          distance: '${other['distance_km'] ?? 5} km away',
-          imageUrl: other['avatar_url'] ?? 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&w=900&q=90',
-          bio: other['bio'] ?? 'Rooted in culture, connected by heart.',
-          prompt: other['prompt'] ?? 'Jollof or waakye? Defend your choice.',
-          interests: other['interests'] is List ? List<String>.from(other['interests']) : ['Afrobeats', 'Culture'],
-          verified: other['verified'] == true,
-          smoking: other['smoking'] ?? 'Non-smoker',
-          drinking: other['drinking'] ?? 'Social drinker',
-          relationshipGoal: other['relationship_goal'] ?? 'Dating',
-          educationLevel: other['education_level'] ?? 'Bachelor\'s',
-        );
-      }).toList();
-
-      if (mounted) {
-        setState(() {
-          _profiles = mapped.isNotEmpty ? mapped : discoverProfiles;
-          _isLoading = false;
-        });
-      }
+      final fresh = asMapList(j['items']).map(MemberCard.new).toList();
+      final seen = _items.map((m) => m.userId).toSet();
+      setState(() {
+        _items.addAll(fresh.where((m) => !seen.contains(m.userId)));
+        _nextOffset = asInt(j['next_offset']);
+        _error = null;
+      });
     } catch (e) {
-      debugPrint('Discover load error: $e');
-      if (mounted) {
-        setState(() {
-          _profiles = discoverProfiles;
-          _isLoading = false;
-        });
-      }
+      setState(() => _error = e);
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
-  List<DiscoverProfile> get _filteredProfiles => _profiles.where((profile) {
-    final matchesAge = profile.age >= _filters.ageRange.start &&
-        profile.age <= _filters.ageRange.end;
-    final loc = _filters.location.trim().toLowerCase();
-    final matchesLocation = loc.isEmpty || profile.location.toLowerCase().contains(loc);
-    final matchesSmoking = _filters.smoking == 'All' || profile.smoking == _filters.smoking;
-    final matchesDrinking = _filters.drinking == 'All' || profile.drinking == _filters.drinking;
-    final matchesGoal = _filters.relationshipGoal == 'All' || profile.relationshipGoal == _filters.relationshipGoal;
+  void _maybeLoadMore() {
+    if (_items.length - _index < 6) _load();
+  }
 
-    return matchesAge && matchesLocation && matchesSmoking && matchesDrinking && matchesGoal;
-  }).toList();
+  MemberCard? get _current => _index < _items.length ? _items[_index] : null;
 
-  DiscoverProfile? get currentProfile => currentIndex < _filteredProfiles.length
-      ? _filteredProfiles[currentIndex]
-      : null;
-
-  void _completeSwipe() => setState(() => currentIndex++);
-
-  Future<void> _swipe(SwipeDirection direction) async {
-    if (currentProfile == null || controller.isAnimatingOut) return;
-    final swipedProfile = currentProfile!;
-
-    final kind = direction == SwipeDirection.right ? 'like' : 'pass';
-    try {
-      final apiClient = ApiClient();
-      await apiClient.post('/likes', data: {
-        'to': swipedProfile.id,
-        'kind': kind,
-      });
-    } catch (e) {
-      debugPrint('Like error: $e');
+  Future<void> _act(String kind, {bool fromDrag = false}) async {
+    final m = _current;
+    if (m == null || _busy) return;
+    if (!canAct(ref)) {
+      _swipe.reset();
+      ensureVerified(context, ref);
+      return;
     }
+    final actions = MemberActions(context, ref);
+    if (kind == 'superlike') {
+      // Super likes spend coins: wait for the server before the card leaves,
+      // so an empty wallet never plays a success animation.
+      setState(() => _busy = true);
+      final r = await actions.like(m.userId, 'superlike');
+      if (mounted) setState(() => _busy = false);
+      if (r == null) return _swipe.reset();
+      await _swipe.superLike();
+      _advance(m, kind, r);
+      return;
+    }
+    if (!fromDrag) await _swipe.swipe(kind == 'pass' ? SwipeDirection.left : SwipeDirection.right);
+    final index = _index;
+    setState(() {
+      _index++;
+      _last = _Swiped(index, kind);
+    });
+    _maybeLoadMore();
+    final r = await actions.like(m.userId, kind);
+    if (!mounted) return;
+    if (r == null) {
+      // The like did not land (limit, rate, network): put the card back.
+      setState(() {
+        _index = index;
+        _last = null;
+      });
+      return;
+    }
+    if (r.matched) _showMatch(m, r);
+  }
 
-    await controller.swipe(
-      direction,
-      onComplete: () {
-        _completeSwipe();
-        if (direction == SwipeDirection.right) {
-          setState(() => matchProfile = swipedProfile);
-        }
-      },
+  void _advance(MemberCard m, String kind, LikeResult r) {
+    setState(() {
+      _last = _Swiped(_index, kind);
+      _index++;
+    });
+    _maybeLoadMore();
+    if (r.matched) _showMatch(m, r);
+  }
+
+  Future<void> _undo() async {
+    final last = _last;
+    if (last == null) return;
+    final m = _items[last.index];
+    final ok = await MemberActions(context, ref).undoLike(m.userId);
+    if (ok && mounted) {
+      setState(() {
+        _index = last.index;
+        _last = null;
+      });
+    }
+  }
+
+  void _showMatch(MemberCard m, LikeResult r) {
+    final myAvatar = ref.read(meProvider).valueOrNull?.avatarUrl;
+    showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'match',
+      pageBuilder: (ctx, _, _) => MatchOverlay(
+        profile: DiscoverProfile.fromCard(m),
+        myImageUrl: myAvatar,
+        onMessage: () {
+          Navigator.pop(ctx);
+          MemberActions(context, ref).openChat(m.userId, conversationId: r.conversationId);
+        },
+        onMessageLater: () => Navigator.pop(ctx),
+      ),
     );
   }
 
-  Future<void> _superLike() async {
-    if (currentProfile == null || controller.isAnimatingOut) return;
-    final swipedProfile = currentProfile!;
-
-    try {
-      final apiClient = ApiClient();
-      await apiClient.post('/likes', data: {
-        'to': swipedProfile.id,
-        'kind': 'superlike',
-      });
-    } catch (e) {
-      debugPrint('Superlike error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Superlike failed: Not enough coins or limit reached')),
-        );
-      }
-      return;
+  Future<void> _openFilters() async {
+    final f = await showFiltersSheet(context, _filters);
+    if (f != null) {
+      setState(() => _filters = f);
+      _reload();
     }
+  }
 
-    await controller.superLike(onComplete: _completeSwipe);
+  Future<void> _gift() async {
+    final m = _current;
+    if (m == null) return;
+    await GiftSheet.show(context, ref, toUserId: m.userId, toName: m.name);
   }
 
   @override
   Widget build(BuildContext context) {
-    final profile = currentProfile;
-    final dark = ThemeColors.isDark(context);
+    final me = ref.watch(meProvider).valueOrNull;
     return Scaffold(
-      backgroundColor: ThemeColors.background(context),
-      body: Stack(
-        children: [
-          DecoratedBox(
-            decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(-.8, -.9),
-            radius: 1.25,
-            colors: dark
-                ? const [Color(0xFF282115), AppColors.black]
-                : const [Color(0xFFFFF7CC), AppColors.lightBackground],
+      backgroundColor: AppColors.black,
+      body: SafeArea(
+        bottom: false,
+        child: Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 10, 10, 6),
+            child: Row(children: [
+              Image.asset('assets/images/mark.png', width: 30, height: 30),
+              const SizedBox(width: 10),
+              const Text('Discover', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -.4)),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => context.push('/wallet'),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(color: AppColors.gold.withValues(alpha: .12), borderRadius: BorderRadius.circular(999)),
+                  child: CoinAmount(me?.balance ?? 0, size: 13),
+                ),
+              ),
+              IconButton(tooltip: 'Search', onPressed: () => context.push('/search'), icon: const Icon(Icons.search_rounded, color: Colors.white)),
+              IconButton(
+                tooltip: 'Filters',
+                onPressed: _openFilters,
+                icon: Badge(
+                  isLabelVisible: _filters.activeCount > 0,
+                  label: Text('${_filters.activeCount}'),
+                  backgroundColor: AppColors.gold,
+                  textColor: Colors.black,
+                  child: const Icon(Icons.tune_rounded, color: Colors.white),
+                ),
+              ),
+            ]),
           ),
-        ),
-            child: SafeArea(
-              child: Column(
-            children: [
-              _Header(
-                onFilter: _showFilters,
-                activeFilterCount: _filters.activeFilterCount,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            child: SegmentedButton<bool>(
+              style: SegmentedButton.styleFrom(
+                foregroundColor: Colors.white70,
+                selectedForegroundColor: Colors.black,
+                selectedBackgroundColor: AppColors.gold,
+                side: BorderSide(color: Colors.white.withValues(alpha: .12)),
               ),
-              Expanded(
-                child: _isLoading
-                    ? const Center(child: CircularProgressIndicator(color: AppColors.gold))
-                    : profile == null ? _emptyState() : _discoverContent(profile),
-              ),
-              _BottomNav(
-                activeTab: 'discover',
-                onDiscover: () {},
-                onLikes: () => context.push('/likes'),
-                onFeed: () => context.push('/feed'),
-                onChat: () => context.push('/chat'),
-                onProfile: () => context.push('/profile'),
-              ),
-            ],
-              ),
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(value: true, label: Text('Meet'), icon: Icon(Icons.style_rounded, size: 18)),
+                ButtonSegment(value: false, label: Text('Browse'), icon: Icon(Icons.grid_view_rounded, size: 18)),
+              ],
+              selected: {_deck},
+              onSelectionChanged: (s) {
+                setState(() => _deck = s.first);
+                _reload();
+              },
             ),
           ),
-          if (matchProfile != null)
-            MatchOverlay(
-              profile: matchProfile!,
-              onMessage: _openChat,
-              onMessageLater: _saveForLater,
-            ),
-        ],
+          const SizedBox(height: 10),
+          Expanded(child: _deck ? _deckView() : _gridView()),
+        ]),
       ),
     );
   }
 
-  Widget _discoverContent(DiscoverProfile profile) {
-    return LayoutBuilder(
-      builder: (context, box) {
-        const controlsHeight = 112.0;
-        final maxCardWidth = math.min(box.maxWidth - 36, 370.0);
-        final maxCardHeight = math.max(260.0, box.maxHeight - controlsHeight);
-        final height = math.min(maxCardHeight, maxCardWidth / .75);
-        final width = height * .75;
-        return Center(
-          child: SizedBox(
-            width: width,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _cardDeck(profile, width, height),
-                const SizedBox(height: 5),
-                _GiftTip(visible: showGiftTip),
-                const SizedBox(height: 4),
-                _ActionBar(
-                  onUndo: _undo,
-                  onNope: () => _swipe(SwipeDirection.left),
-                  onSuperLike: _superLike,
-                  onGift: _gift,
-                  onLike: () => _swipe(SwipeDirection.right),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+  Widget _emptyOrError() {
+    if (_error != null && _items.isEmpty) return ErrorView(error: _error!, onRetry: _reload);
+    if (_loading && _items.length <= _index) return const LoadingView();
+    return EmptyState(
+      icon: Icons.auto_awesome_rounded,
+      title: _filters.activeCount > 0 ? 'No one matches these filters' : 'You have seen everyone for now',
+      body: _filters.activeCount > 0 ? 'Try widening the age range or distance.' : 'New members join every day. Check back soon, or browse the grid.',
+      action: _filters.activeCount > 0 ? 'Change filters' : 'Refresh',
+      onAction: _filters.activeCount > 0 ? _openFilters : _reload,
     );
   }
 
-  Widget _cardDeck(DiscoverProfile profile, double width, double height) {
-    return SizedBox(
-      width: width,
-      height: height + 34,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onPanUpdate: (details) => controller.update(details.delta),
-        onPanEnd: (_) async {
-          final result = await controller.endDrag();
-          if (result != null) _completeSwipe();
-        },
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            if (currentIndex + 1 < _filteredProfiles.length)
-              Positioned(
-                top: 25,
-                left: 12,
-                child: SizedBox(
-                  width: width - 24,
-                  height: height,
-                  child: Opacity(
-                    opacity: .82,
-                    child: SwipeCard(
-                      profile: _filteredProfiles[currentIndex + 1],
-                      rotation: 0,
-                      position: Offset.zero,
-                      likeProgress: 0,
-                      nopeProgress: 0,
-                      compact: true,
-                      onOpenProfile: () => ProfileDetailSheet.show(
-                        context,
-                        _filteredProfiles[currentIndex + 1],
+  Widget _deckView() {
+    final m = _current;
+    if (m == null) return _emptyOrError();
+    final locale = ref.watch(localeProvider);
+    final profile = DiscoverProfile.fromCard(m, locale: locale);
+    final next = _index + 1 < _items.length ? DiscoverProfile.fromCard(_items[_index + 1], locale: locale) : null;
+    void open(DiscoverProfile p) => p.card.username == null ? null : context.push('/u/${p.card.username}');
+    return LayoutBuilder(builder: (context, c) {
+      final width = c.maxWidth - 32;
+      final height = c.maxHeight - 96;
+      return Column(children: [
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onPanUpdate: _busy ? null : (d) => _swipe.update(d.delta),
+              onPanEnd: _busy
+                  ? null
+                  : (_) async {
+                      if (!canAct(ref) && _swipe.progress >= 1) {
+                        _swipe.reset();
+                        ensureVerified(context, ref);
+                        return;
+                      }
+                      final dir = await _swipe.endDrag();
+                      if (dir == SwipeDirection.right) _act('like', fromDrag: true);
+                      if (dir == SwipeDirection.left) _act('pass', fromDrag: true);
+                    },
+              child: Stack(clipBehavior: Clip.none, children: [
+                if (next != null)
+                  Positioned(
+                    top: 18,
+                    left: 12,
+                    child: SizedBox(
+                      width: width - 24,
+                      height: height,
+                      child: Opacity(
+                        opacity: .8,
+                        child: SwipeCard(profile: next, rotation: 0, position: Offset.zero, likeProgress: 0, nopeProgress: 0, compact: true),
                       ),
                     ),
                   ),
-                ),
-              ),
-            SizedBox(
-              width: width,
-              height: height,
-              child: SwipeCard(
-                profile: profile,
-                rotation: controller.rotation,
-                position: controller.position,
-                likeProgress: controller.showingLike ? controller.progress : 0,
-                nopeProgress: controller.showingNope ? controller.progress : 0,
-                onOpenProfile: () => ProfileDetailSheet.show(context, profile),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _emptyState() => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(
-            Icons.auto_awesome_rounded,
-            color: AppColors.gold,
-            size: 64,
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'You’re all caught up',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'More people will arrive soon.',
-            style: TextStyle(color: Colors.white60),
-          ),
-          const SizedBox(height: 20),
-          OutlinedButton(
-            onPressed: () => setState(() => currentIndex = 0),
-            child: const Text('Start again'),
-          ),
-        ],
-      ),
-    ),
-  );
-
-  void _undo() {
-    if (currentIndex == 0 || controller.isAnimatingOut) return;
-    HapticFeedback.lightImpact();
-    setState(() => currentIndex--);
-  }
-
-  void _gift() {
-    HapticFeedback.selectionClick();
-    if (currentProfile != null) {
-      GiftPickerSheet.show(
-        context,
-        recipientName: currentProfile!.name,
-        recipientImageUrl: currentProfile!.imageUrl,
-      );
-    }
-  }
-
-  void _openChat() {
-    final profile = matchProfile;
-    if (profile == null) return;
-    setState(() => matchProfile = null);
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => ConversationScreen(
-          name: profile.name,
-          imageUrl: profile.imageUrl,
-        ),
-      ),
-    );
-  }
-
-  void _saveForLater() {
-    final profile = matchProfile;
-    if (profile == null) return;
-    LikesStore.instance.add(profile);
-    setState(() => matchProfile = null);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${profile.name} was added to your Likes.'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  void _showFilters() {
-    HapticFeedback.selectionClick();
-    FiltersSheet.show(
-      context,
-      initialFilters: _filters,
-      onApply: (newFilters) {
-        setState(() {
-          _filters = newFilters;
-          currentIndex = 0;
-        });
-      },
-    );
-  }
-}
-
-class _Header extends StatelessWidget {
-  const _Header({
-    required this.onFilter,
-    required this.activeFilterCount,
-  });
-  final VoidCallback onFilter;
-  final int activeFilterCount;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(18, 11, 18, 8),
-    child: Row(
-      children: [
-        CircleAvatar(
-          radius: 19,
-          backgroundColor: ThemeColors.surfaceAlt(context),
-          child: Text(
-            'AA',
-            style: TextStyle(
-              color: ThemeColors.text(context),
-              fontSize: 11,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-        const SizedBox(width: 9),
-        Text(
-          'Affinity',
-          style: TextStyle(
-            color: ThemeColors.text(context),
-            fontSize: 19,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const Spacer(),
-        const _CoinPill(),
-        const SizedBox(width: 7),
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            _HeaderIcon(icon: Icons.search_rounded, onTap: onFilter),
-            if (activeFilterCount > 0)
-              Positioned(
-                top: -2,
-                right: -2,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                    color: AppColors.pink,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Text(
-                    '$activeFilterCount',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w900,
-                    ),
+                SizedBox(
+                  width: width,
+                  height: height,
+                  child: SwipeCard(
+                    key: ValueKey(profile.id),
+                    profile: profile,
+                    rotation: _swipe.rotation,
+                    position: _swipe.position,
+                    likeProgress: _swipe.showingLike ? _swipe.progress : 0,
+                    nopeProgress: _swipe.showingNope ? _swipe.progress : 0,
+                    onOpenProfile: () => open(profile),
                   ),
                 ),
-              ),
-          ],
-        ),
-        const SizedBox(width: 7),
-        const _BadgeIcon(icon: Icons.notifications_none_rounded),
-      ],
-    ),
-  );
-}
-
-class _CoinPill extends StatelessWidget {
-  const _CoinPill();
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: () => WalletScreen.show(context),
-    child: Container(
-      height: 38,
-      padding: const EdgeInsets.symmetric(horizontal: 11),
-      decoration: BoxDecoration(
-        color: const Color(0xFF3A321C),
-        borderRadius: BorderRadius.circular(99),
-        border: Border.all(color: AppColors.gold.withValues(alpha: .35)),
-      ),
-      child: const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.monetization_on_rounded, color: AppColors.gold, size: 16),
-          SizedBox(width: 5),
-          Text(
-            '1,250',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 12,
+              ]),
             ),
           ),
-        ],
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(28, 14, 28, 14),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            _ActionButton(icon: Icons.replay_rounded, size: 40, color: const Color(0xFF8B8E98), onTap: _last == null ? null : _undo),
+            _ActionButton(icon: Icons.close_rounded, size: 50, color: const Color(0xFFFF6A78), onTap: () => _act('pass')),
+            _ActionButton(icon: Icons.star_rounded, size: 46, color: const Color(0xFF5AD9FF), onTap: () => _act('superlike'), busy: _busy),
+            _ActionButton(icon: Icons.card_giftcard_rounded, size: 40, color: AppColors.gold, onTap: _gift),
+            _ActionButton(icon: Icons.favorite_rounded, size: 54, color: const Color(0xFFFFA21E), onTap: () => _act('like')),
+          ]),
+        ),
+      ]);
+    });
+  }
+
+  Widget _gridView() {
+    if (_items.isEmpty) return _emptyOrError();
+    return RefreshIndicator(
+      color: AppColors.gold,
+      onRefresh: _reload,
+      child: GridView.builder(
+        controller: _grid,
+        padding: const EdgeInsets.fromLTRB(14, 4, 14, 24),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: .72,
+        ),
+        itemCount: _items.length + (_nextOffset != null ? 1 : 0),
+        itemBuilder: (_, i) {
+          if (i >= _items.length) return const LoadingView();
+          final m = _items[i];
+          return MemberGridTile(member: m, badge: m.boosted ? 'Boosted' : (m.likedMe ? 'Likes you' : null));
+        },
       ),
-    ),
-  );
-}
-
-class _HeaderIcon extends StatelessWidget {
-  const _HeaderIcon({required this.icon, required this.onTap});
-  final IconData icon;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) => InkResponse(
-    onTap: onTap,
-    radius: 22,
-    child: Container(
-      width: 38,
-      height: 38,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      color: ThemeColors.surfaceAlt(context),
-    ),
-      child: Icon(icon, color: ThemeColors.text(context), size: 19),
-    ),
-  );
-}
-
-class _BadgeIcon extends StatelessWidget {
-  const _BadgeIcon({required this.icon});
-  final IconData icon;
-  @override
-  Widget build(BuildContext context) => Stack(
-    clipBehavior: Clip.none,
-    children: [
-      const _HeaderIcon(icon: Icons.notifications_none_rounded, onTap: _noop),
-      Positioned(
-        top: 2,
-        right: 3,
-        child: Container(
-          width: 8,
-          height: 8,
-          decoration: const BoxDecoration(
-            color: Color(0xFFFFA84C),
-            shape: BoxShape.circle,
-          ),
-        ),
-      ),
-    ],
-  );
-  static void _noop() {}
-}
-
-class _GiftTip extends StatelessWidget {
-  const _GiftTip({required this.visible});
-  final bool visible;
-  @override
-  Widget build(BuildContext context) => AnimatedOpacity(
-    opacity: visible ? 1 : 0,
-    duration: const Duration(milliseconds: 180),
-    child: IgnorePointer(
-      ignoring: !visible,
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-            decoration: BoxDecoration(
-              color: Colors.black,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Gift 50 ',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                Icon(
-                  Icons.monetization_on_outlined,
-                  color: AppColors.gold,
-                  size: 13,
-                ),
-                Text(
-                  ' to stand out • 3x matches',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-class _ActionBar extends StatelessWidget {
-  const _ActionBar({
-    required this.onUndo,
-    required this.onNope,
-    required this.onSuperLike,
-    required this.onGift,
-    required this.onLike,
-  });
-  final VoidCallback onUndo, onNope, onSuperLike, onGift, onLike;
-  @override
-  Widget build(BuildContext context) => Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        _ActionButton(
-          icon: Icons.replay_rounded,
-          size: 38,
-          color: const Color(0xFF8B8E98),
-          onTap: onUndo,
-        ),
-        _ActionButton(
-          icon: Icons.close_rounded,
-          size: 44,
-          color: const Color(0xFFFF6A78),
-          onTap: onNope,
-        ),
-        _ActionButton(
-          icon: Icons.star_rounded,
-          size: 50,
-          color: const Color(0xFF5AD9FF),
-          onTap: onSuperLike,
-        ),
-        _ActionButton(
-          icon: Icons.card_giftcard_rounded,
-          size: 44,
-          color: AppColors.gold,
-          onTap: onGift,
-        ),
-        _ActionButton(
-          icon: Icons.favorite_rounded,
-          size: 50,
-          color: const Color(0xFFFFA21E),
-          onTap: onLike,
-        ),
-      ],
     );
+  }
 }
 
 class _ActionButton extends StatelessWidget {
-  const _ActionButton({
-    required this.icon,
-    required this.size,
-    required this.color,
-    required this.onTap,
-  });
+  const _ActionButton({required this.icon, required this.size, required this.color, required this.onTap, this.busy = false});
   final IconData icon;
   final double size;
   final Color color;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) => PressableScale(
-    onTap: onTap,
-    child: Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color.withValues(alpha: .18),
-        border: Border.all(color: color.withValues(alpha: .82)),
-        boxShadow: [
-          BoxShadow(color: color.withValues(alpha: .18), blurRadius: 17),
-        ],
-      ),
-      child: Icon(icon, color: color, size: size * .44),
-    ),
-  );
-}
-
-class _BottomNav extends StatelessWidget {
-  const _BottomNav({
-    required this.onDiscover,
-    required this.onLikes,
-    required this.onFeed,
-    required this.onChat,
-    required this.onProfile,
-    this.activeTab = 'discover',
-  });
-
-  final VoidCallback onDiscover;
-  final VoidCallback onLikes;
-  final VoidCallback onFeed;
-  final VoidCallback onChat;
-  final VoidCallback onProfile;
-  final String activeTab;
-
+  final VoidCallback? onTap;
+  final bool busy;
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 70,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: ThemeColors.surface(context),
-        border: Border(
-          top: BorderSide(
-            color: ThemeColors.border(context),
-          ),
+    final c = onTap == null ? Colors.white24 : color;
+    return PressableScale(
+      onTap: onTap ?? () {},
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: c.withValues(alpha: .16),
+          border: Border.all(color: c.withValues(alpha: .8)),
+          boxShadow: [BoxShadow(color: c.withValues(alpha: .16), blurRadius: 16)],
         ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _NavItem(
-            icon: Icons.explore_rounded,
-            label: 'Discover',
-            active: activeTab == 'discover',
-            onTap: onDiscover,
-          ),
-          _NavItem(
-            icon: Icons.favorite_border_rounded,
-            label: 'Likes',
-            badge: '12',
-            active: activeTab == 'likes',
-            onTap: onLikes,
-          ),
-          _NavItem(
-            icon: Icons.dynamic_feed_rounded,
-            label: 'Feeds',
-            active: activeTab == 'feed',
-            onTap: onFeed,
-          ),
-          _NavItem(
-            icon: Icons.chat_bubble_outline_rounded,
-            label: 'Chat',
-            dot: true,
-            active: activeTab == 'chat',
-            onTap: onChat,
-          ),
-          _NavItem(
-            icon: Icons.person_outline_rounded,
-            label: 'Profile',
-            active: activeTab == 'profile',
-            onTap: onProfile,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NavItem extends StatelessWidget {
-  const _NavItem({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.active = false,
-    this.badge,
-    this.dot = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool active;
-  final String? badge;
-  final bool dot;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = active
-        ? AppColors.gold
-        : Colors.white54;
-
-    return SizedBox(
-      width: 62,
-      child: PressableScale(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            vertical: 7,
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Icon(
-                    icon,
-                    color: color,
-                    size: 22,
-                  ),
-                  if (badge != null)
-                    Positioned(
-                      right: -12,
-                      top: -8,
-                      child: _NavBadge(
-                        text: badge!,
-                      ),
-                    ),
-                  if (dot)
-                    Positioned(
-                      right: -4,
-                      top: -3,
-                      child: Container(
-                        width: 7,
-                        height: 7,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFFF5578),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 10,
-                  fontWeight: active
-                      ? FontWeight.w800
-                      : FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _NavBadge extends StatelessWidget {
-  const _NavBadge({
-    required this.text,
-  });
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 5,
-        vertical: 1,
-      ),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFF4771),
-        borderRadius: BorderRadius.circular(99),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 8,
-          fontWeight: FontWeight.w900,
-        ),
+        child: busy
+            ? Padding(padding: EdgeInsets.all(size * .3), child: CircularProgressIndicator(strokeWidth: 2, color: c))
+            : Icon(icon, color: c, size: size * .45),
       ),
     );
   }

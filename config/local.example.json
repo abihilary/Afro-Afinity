@@ -1,0 +1,10 @@
+{
+  "API_BASE_URL": "http://localhost:8787",
+  "WEB_URL": "http://localhost:3000",
+  "SUPABASE_URL": "http://127.0.0.1:54421",
+  "SUPABASE_ANON_KEY": "<ANON_KEY from `npx supabase status` in ~/Documents/afroaffinity>",
+  "GOOGLE_WEB_CLIENT_ID": "",
+  "GOOGLE_IOS_CLIENT_ID": "",
+  "DEV_EMAIL": "(debug only) a local test account",
+  "DEV_PASSWORD": ""
+}

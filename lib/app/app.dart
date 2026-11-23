@@ -1,42 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'theme/app_theme.dart';
-import 'theme/theme_controller.dart';
 import 'router.dart';
+import 'theme/app_theme.dart';
 
-class AfricanAffinityApp extends StatefulWidget {
+class AfricanAffinityApp extends ConsumerWidget {
   const AfricanAffinityApp({super.key});
 
   @override
-  State<AfricanAffinityApp> createState() => _AfricanAffinityAppState();
-}
-
-class _AfricanAffinityAppState extends State<AfricanAffinityApp> {
-  final _themeController = ThemeController.instance;
-
-  @override
-  void initState() {
-    super.initState();
-    _themeController.addListener(_refresh);
-  }
-
-  @override
-  void dispose() {
-    _themeController.removeListener(_refresh);
-    super.dispose();
-  }
-
-  void _refresh() => setState(() {});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp.router(
-      title: 'African Affinity',
+      title: 'Afro Affinity',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
+      theme: AppTheme.dark(),
       darkTheme: AppTheme.dark(),
-      themeMode: _themeController.themeMode,
-      routerConfig: appRouter,
+      themeMode: ThemeMode.dark,
+      routerConfig: ref.watch(routerProvider),
     );
   }
 }

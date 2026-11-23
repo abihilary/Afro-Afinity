@@ -108,14 +108,16 @@ class SwipeCard extends StatelessWidget {
                             ),
                             const SizedBox(width: 6),
                           ],
-                          const _TopPill(
-                            icon: Icons.local_fire_department_rounded,
-                            label: 'Active now',
-                            dark: true,
-                          ),
+                          if (profile.online)
+                            const _TopPill(
+                              icon: Icons.local_fire_department_rounded,
+                              label: 'Active now',
+                              dark: true,
+                            ),
                         ],
                       ),
                     ),
+                    if (profile.distance.isNotEmpty)
                     Positioned(
                       top: 16,
                       right: 16,
@@ -165,7 +167,7 @@ class SwipeCard extends StatelessWidget {
                     bottom: compact ? 15 : 18,
                     child: compact
                         ? Text(
-                            '${profile.name}, ${profile.age}',
+                            profile.age == null ? profile.name : '${profile.name}, ${profile.age}',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 18,
@@ -199,7 +201,7 @@ class _ProfileDetails extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                '${profile.name}, ${profile.age}',
+                profile.age == null ? profile.name : '${profile.name}, ${profile.age}',
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: Colors.white,
@@ -235,6 +237,7 @@ class _ProfileDetails extends StatelessWidget {
             ),
           ],
         ),
+        if (profile.bio.isNotEmpty) ...[
         const SizedBox(height: 12),
         Container(
           width: double.infinity,
@@ -248,7 +251,7 @@ class _ProfileDetails extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'MY FAVORITE AFROBEATS ARTIST IS...',
+                'ABOUT ME',
                 style: TextStyle(
                   color: Colors.white54,
                   fontSize: 10,
@@ -258,7 +261,7 @@ class _ProfileDetails extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                profile.prompt,
+                profile.bio,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
@@ -271,6 +274,7 @@ class _ProfileDetails extends StatelessWidget {
             ],
           ),
         ),
+        ],
         const SizedBox(height: 10),
         Wrap(
           spacing: 6,
